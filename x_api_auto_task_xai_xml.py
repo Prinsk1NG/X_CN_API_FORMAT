@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v7.9 (出海搞钱版 - 免疫时空断流与中文编码Bug)
+x_api_auto_task_xai_xml.py  v7.10 (出海搞钱版 - 降维反风控特化版)
 Architecture: Whales/IndieHackers/Global Track -> Key Pool -> XML Parsing -> Clean UI
 """
 
@@ -57,13 +57,13 @@ def D(b64_str):
 URL_SF_IMAGE   = D("aHR0cHM6Ly9hcGkuc2lsaWNvbmZsb3cuY24vdjEvaW1hZ2VzL2dlbmVyYXRpb25z")
 URL_IMGBB      = D("aHR0cHM6Ly9hcGkuaW1nYmIuY29tLzEvdXBsb2Fk")
 
-# ── 巨鲸池 (10人)：流量巨大、容易霸屏的大V与媒体，限制配额防止碾压干货
+# ── 巨鲸池 (10人)：流量巨大、容易霸屏的大V与媒体
 WHALE_ACCOUNTS = [
     "kaifulee", "Fenng", "lidangzzz", "livid", "tualatrix", 
     "nishuang", "tinyfool", "evilcos", "jiqizhixin", "geekpark"
 ]
 
-# ── 专家池 (70人)：硬核出海开发者、SaaS创始人、知识博主，给予最高展示配额保障
+# ── 专家池 (70人)：硬核出海开发者、SaaS创始人、知识博主
 EXPERT_ACCOUNTS = [
     "dotey", "op7418", "Gorden_Sun", "xiaohu", "shao__meng", "thinkingjimmy", "vista8", "lijigang", "WaytoAGI", "oran_ge", "AlchainHust", "haibun",
     "SamuelQZQ", "elliotchen100", "berryxia", "lxfater", "turingou", "virushuo", "fankaishuoai", "XDash", "idoubicc", "Cydiar404", "JefferyTatsuya",
@@ -84,11 +84,14 @@ def get_feishu_webhooks() -> list:
         if url: urls.append(url)
     return urls
 
-def get_dates() -> tuple:
-    tz = timezone(timedelta(hours=8))
-    today = datetime.now(tz)
-    yesterday = today - timedelta(days=1)
-    return today.strftime("%Y-%m-%d"), yesterday.strftime("%Y-%m-%d")
+def get_safe_yesterday() -> str:
+    """获取安全的现实世界基准时间，防止环境时空错乱"""
+    try:
+        time_resp = requests.get("http://worldtimeapi.org/api/timezone/Asia/Shanghai", timeout=5).json()
+        real_today = datetime.fromisoformat(time_resp["datetime"])
+        return (real_today - timedelta(days=2)).strftime("%Y-%m-%d") # 放宽到2天内，保证有数据
+    except:
+        return (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
 
 def parse_twitter_date(date_str):
     try:
@@ -115,7 +118,7 @@ def safe_int(val):
         return 0
 
 # ==============================================================================
-# 🚀 第一阶段：防断流抓取引擎
+# 🚀 第一阶段：降维反风控抓取引擎
 # ==============================================================================
 def parse_rapidapi_tweets(data) -> list:
     all_tweets = []
@@ -162,8 +165,9 @@ def parse_rapidapi_tweets(data) -> list:
     return unique
 
 def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
-    """定向抓取，已移除 since 限制，保证低频发帖大佬的内容也能被抓取"""
+    """定向抓取，大幅降低 chunk_size，防止长尾查询算力超载"""
     if not TWT_KEYS: return []
+    yesterday = get_safe_yesterday()
     chunks = [accounts[i:i + chunk_size] for i in range(0, len(accounts), chunk_size)]
     all_tweets = []
     consecutive_errors = 0  
@@ -176,8 +180,8 @@ def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
         print(f"\n⏳ [{label}扫盘] 第 {i}/{len(chunks)} 批 (密钥尾号: ...{current_key[-4:]})...", flush=True)
         query = " OR ".join([f"from:{acc}" for acc in chunk])
         
-        # 🚨 破解地雷 1：删除了 since:{yesterday}，强行拉取这批人的最新推文！
-        params = {"query": f"({query}) -is:retweet", "type": "Latest", "count": "40"}
+        # 降维请求：简单查询，防止触发推特并发防御
+        params = {"query": f"({query}) since:{yesterday} -is:retweet", "type": "Latest", "count": "20"}
         
         success = False
         for attempt in range(3):
@@ -187,7 +191,7 @@ def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
                     raw_json = resp.json()
                     tweets = parse_rapidapi_tweets(raw_json)
                     if len(tweets) == 0:
-                        print(f"    ⚠️ 账号确实没更新，返回游标: {str(raw_json)[:100]}...", flush=True)
+                        print(f"    ⚠️ 此批次无发文，返回游标。", flush=True)
                     all_tweets.extend(tweets)
                     print(f"  ✅ 提取 {len(tweets)} 条。")
                     consecutive_errors = 0 
@@ -207,21 +211,21 @@ def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
     return all_tweets
 
 def fetch_global_hot_tweets() -> list:
-    """全网探测引擎，已替换为全英文国际暗号，完美免疫中文编码崩溃"""
+    """全网探测引擎，废除高级风控操作符，交由本地 Python 进行点赞提纯"""
     if not TWT_KEYS: return []
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    yesterday = get_safe_yesterday()
     all_tweets = []
-    print(f"\n📡 [全网探测] 扫描出海与独立开发热点...", flush=True)
+    print(f"\n📡 [全网探测] 启动降维扫描，锁定出海热点...", flush=True)
     
-    # 🚨 破解地雷 2：使用出海圈全英文高频 Tag，绕开 API 对中文的支持缺陷
+    # 🚨 破解地雷：去掉了引发风控的 min_faves:30，用最轻量的方式获取基础数据
     grok_queries = [
-        f'(buildinpublic OR indiehacker OR indiehackers OR MRR OR solopreneur OR SaaS) since:{yesterday} min_faves:30 -is:retweet'
+        f'(出海 OR 独立开发 OR indiehacker OR MRR OR 搞钱) since:{yesterday} -is:retweet'
     ]
     
     for idx, q in enumerate(grok_queries, 1):
         current_key = get_random_twt_key()
         headers = {"x-rapidapi-key": current_key, "x-rapidapi-host": RAPIDAPI_HOST}
-        params_discovery = {"query": q, "type": "Top", "count": "20"}
+        params_discovery = {"query": q, "type": "Top", "count": "40"}
         
         for attempt in range(3):
             try:
@@ -230,7 +234,7 @@ def fetch_global_hot_tweets() -> list:
                     raw_json = resp.json()
                     tweets = parse_rapidapi_tweets(raw_json)
                     all_tweets.extend(tweets)
-                    print(f"    ✅ 探测成功，捕获 {len(tweets)} 条全网出海情报。")
+                    print(f"    ✅ 探测成功，原始捕获 {len(tweets)} 条情报。")
                     break
                 elif resp.status_code in [403, 404]: break 
                 else: time.sleep(2)
@@ -525,18 +529,18 @@ def save_daily_data(today_str: str, post_objects: list, report_text: str):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"出海搞钱的中国人都在聊啥 v7.9 (防断流特化版 - {mode_str})", flush=True)
+    print(f"出海搞钱的中国人都在聊啥 v7.10 (降维反风控特化版 - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     print(f"🔑 成功装载 {len(TWT_KEYS)} 把 RapidAPI 密钥，准备进入轮换并发", flush=True)
 
     today_str, _ = get_dates()
     all_raw_tweets = []
     
-    # 🚨 第 1 步：定向抓取巨鲸池（10人，每次查3个）
-    all_raw_tweets.extend(fetch_user_tweets(WHALE_ACCOUNTS, chunk_size=3, label="巨鲸"))
+    # 🚨 第 1 步：巨鲸池（10人）- 每次只查 2 个，防超时
+    all_raw_tweets.extend(fetch_user_tweets(WHALE_ACCOUNTS, chunk_size=2, label="巨鲸"))
     
-    # 🚨 第 2 步：定向抓取专家池（70人，每次查10个）
-    all_raw_tweets.extend(fetch_user_tweets(EXPERT_ACCOUNTS, chunk_size=10, label="专家"))
+    # 🚨 第 2 步：专家池（70人）- 每次查 3 个，化整为零
+    all_raw_tweets.extend(fetch_user_tweets(EXPERT_ACCOUNTS, chunk_size=3, label="专家"))
     
     # 🚨 第 3 步：全网独立开发/搞钱热点扫描
     all_raw_tweets.extend(fetch_global_hot_tweets())
@@ -549,7 +553,8 @@ def main():
     for t in all_raw_tweets:
         likes = t.get("favorites", 0)
         is_reply = bool(t.get("reply_to"))
-        if not is_reply or likes >= 0:
+        # 本地 Python 点赞提纯！不再依赖 API 端的 min_faves，彻底绕过风控
+        if not is_reply and likes >= 5: 
             all_posts_flat.append({
                 "a": t.get("screen_name", "Unknown"), 
                 "tweet_id": t.get("tweet_id", ""),
@@ -615,7 +620,7 @@ def main():
                 push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
                 
             save_daily_data(today_str, final_feed, xml_result)
-            print("\n🎉 V7.9 运行完毕！", flush=True)
+            print("\n🎉 V7.10 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
