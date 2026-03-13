@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v7.10 (出海搞钱版 - 降维反风控特化版)
+x_api_auto_task_xai_xml.py  v7.11 (出海搞钱版 - 降维反风控 + 修复日期Bug)
 Architecture: Whales/IndieHackers/Global Track -> Key Pool -> XML Parsing -> Clean UI
 """
 
@@ -28,7 +28,7 @@ SF_API_KEY          = os.getenv("SF_API_KEY", "")
 XAI_API_KEY         = os.getenv("XAI_API_KEY", "")    
 IMGBB_API_KEY       = os.getenv("IMGBB_API_KEY", "") 
 
-# 🚨 动态密钥池装载机制
+# 🚨 动态密钥池装载机制 (支持最多9个小号轮换)
 TWT_KEYS = []
 for i in range(1, 10):
     k = os.getenv(f"TWTAPI_KEY_{i}")
@@ -83,6 +83,13 @@ def get_feishu_webhooks() -> list:
         url = os.getenv(f"FEISHU_WEBHOOK_URL{suffix}", "")
         if url: urls.append(url)
     return urls
+
+# 🚨 补回丢失的日期生成函数！
+def get_dates() -> tuple:
+    tz = timezone(timedelta(hours=8))
+    today = datetime.now(tz)
+    yesterday = today - timedelta(days=1)
+    return today.strftime("%Y-%m-%d"), yesterday.strftime("%Y-%m-%d")
 
 def get_safe_yesterday() -> str:
     """获取安全的现实世界基准时间，防止环境时空错乱"""
@@ -217,7 +224,7 @@ def fetch_global_hot_tweets() -> list:
     all_tweets = []
     print(f"\n📡 [全网探测] 启动降维扫描，锁定出海热点...", flush=True)
     
-    # 🚨 破解地雷：去掉了引发风控的 min_faves:30，用最轻量的方式获取基础数据
+    # 去掉了引发风控的 min_faves:30，用最轻量的方式获取基础数据
     grok_queries = [
         f'(出海 OR 独立开发 OR indiehacker OR MRR OR 搞钱) since:{yesterday} -is:retweet'
     ]
@@ -529,7 +536,7 @@ def save_daily_data(today_str: str, post_objects: list, report_text: str):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"出海搞钱的中国人都在聊啥 v7.10 (降维反风控特化版 - {mode_str})", flush=True)
+    print(f"出海搞钱的中国人都在聊啥 v7.11 (降维反风控特化版 - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     print(f"🔑 成功装载 {len(TWT_KEYS)} 把 RapidAPI 密钥，准备进入轮换并发", flush=True)
 
@@ -620,7 +627,7 @@ def main():
                 push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
                 
             save_daily_data(today_str, final_feed, xml_result)
-            print("\n🎉 V7.10 运行完毕！", flush=True)
+            print("\n🎉 V7.11 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
