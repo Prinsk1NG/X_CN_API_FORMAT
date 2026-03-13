@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v7.8 (出海搞钱专属版)
+x_api_auto_task_xai_xml.py  v7.8 (出海搞钱专属版 + API底层透视排错)
 Architecture: Whales/IndieHackers/Global Track -> Key Pool -> XML Parsing -> Clean UI
 """
 
@@ -115,7 +115,7 @@ def safe_int(val):
         return 0
 
 # ==============================================================================
-# 🚀 第一阶段：抓取引擎 
+# 🚀 第一阶段：抓取引擎 (加入透视镜排错机制)
 # ==============================================================================
 def parse_rapidapi_tweets(data) -> list:
     all_tweets = []
@@ -182,7 +182,13 @@ def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
             try:
                 resp = requests.get(URL_TWTAPI, headers=headers, params=params, timeout=25)
                 if resp.status_code == 200:
-                    tweets = parse_rapidapi_tweets(resp.json())
+                    raw_json = resp.json() # 获取原始返回数据
+                    tweets = parse_rapidapi_tweets(raw_json)
+                    
+                    # 🚨 增加：透视镜排错逻辑
+                    if len(tweets) == 0:
+                        print(f"    ⚠️ API返回成功，但找不到推文！原始数据前200字符: {str(raw_json)[:200]}", flush=True)
+                        
                     all_tweets.extend(tweets)
                     print(f"  ✅ 提取 {len(tweets)} 条。")
                     consecutive_errors = 0 
@@ -207,7 +213,7 @@ def fetch_global_hot_tweets() -> list:
     all_tweets = []
     print(f"\n📡 [全网探测] 扫描出海与独立开发热点...", flush=True)
     
-    # 🚨 替换为全新的出海搞钱关键词
+    # 出海搞钱专属关键词
     grok_queries = [
         f'(出海 OR 独立开发 OR MRR OR 搞钱 OR 独立产品 OR 订阅制) since:{yesterday} min_faves:30 -is:retweet'
     ]
@@ -221,7 +227,13 @@ def fetch_global_hot_tweets() -> list:
             try:
                 resp = requests.get(URL_TWTAPI, headers=headers, params=params_discovery, timeout=25)
                 if resp.status_code == 200:
-                    tweets = parse_rapidapi_tweets(resp.json())
+                    raw_json = resp.json() # 获取原始返回数据
+                    tweets = parse_rapidapi_tweets(raw_json)
+                    
+                    # 🚨 增加：透视镜排错逻辑
+                    if len(tweets) == 0:
+                        print(f"    ⚠️ API返回成功，但找不到推文！原始数据前200字符: {str(raw_json)[:200]}", flush=True)
+                        
                     all_tweets.extend(tweets)
                     print(f"    ✅ 探测成功，捕获 {len(tweets)} 条全网情报。")
                     break
