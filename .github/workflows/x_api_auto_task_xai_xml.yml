@@ -44,7 +44,7 @@ jobs:
           # 🚨 智能密钥池：主号 + 小号轮换分流
           TWTAPI_KEY: ${{ secrets.TWTAPI_KEY }}
           TWTAPI_KEY_2: ${{ secrets.TWTAPI_KEY_2 }}
-          
+          TWTAPI_KEY_3: ${{ secrets.TWTAPI_KEY_3 }}
           # 如果你以后白嫖了更多的 RapidAPI 账号，只需要在 GitHub Secrets 里建好，取消下方注释即可：
           # TWTAPI_KEY_3: ${{ secrets.TWTAPI_KEY_3 }}
           # TWTAPI_KEY_4: ${{ secrets.TWTAPI_KEY_4 }}
