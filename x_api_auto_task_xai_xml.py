@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v7.8 (出海搞钱专属版 + API底层透视排错)
+x_api_auto_task_xai_xml.py  v7.9 (出海搞钱版 - 免疫时空断流与中文编码Bug)
 Architecture: Whales/IndieHackers/Global Track -> Key Pool -> XML Parsing -> Clean UI
 """
 
@@ -115,7 +115,7 @@ def safe_int(val):
         return 0
 
 # ==============================================================================
-# 🚀 第一阶段：抓取引擎 (加入透视镜排错机制)
+# 🚀 第一阶段：防断流抓取引擎
 # ==============================================================================
 def parse_rapidapi_tweets(data) -> list:
     all_tweets = []
@@ -162,8 +162,8 @@ def parse_rapidapi_tweets(data) -> list:
     return unique
 
 def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
+    """定向抓取，已移除 since 限制，保证低频发帖大佬的内容也能被抓取"""
     if not TWT_KEYS: return []
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     chunks = [accounts[i:i + chunk_size] for i in range(0, len(accounts), chunk_size)]
     all_tweets = []
     consecutive_errors = 0  
@@ -175,20 +175,19 @@ def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
         
         print(f"\n⏳ [{label}扫盘] 第 {i}/{len(chunks)} 批 (密钥尾号: ...{current_key[-4:]})...", flush=True)
         query = " OR ".join([f"from:{acc}" for acc in chunk])
-        params = {"query": f"({query}) since:{yesterday} -is:retweet", "type": "Latest", "count": "40"}
+        
+        # 🚨 破解地雷 1：删除了 since:{yesterday}，强行拉取这批人的最新推文！
+        params = {"query": f"({query}) -is:retweet", "type": "Latest", "count": "40"}
         
         success = False
         for attempt in range(3):
             try:
                 resp = requests.get(URL_TWTAPI, headers=headers, params=params, timeout=25)
                 if resp.status_code == 200:
-                    raw_json = resp.json() # 获取原始返回数据
+                    raw_json = resp.json()
                     tweets = parse_rapidapi_tweets(raw_json)
-                    
-                    # 🚨 增加：透视镜排错逻辑
                     if len(tweets) == 0:
-                        print(f"    ⚠️ API返回成功，但找不到推文！原始数据前200字符: {str(raw_json)[:200]}", flush=True)
-                        
+                        print(f"    ⚠️ 账号确实没更新，返回游标: {str(raw_json)[:100]}...", flush=True)
                     all_tweets.extend(tweets)
                     print(f"  ✅ 提取 {len(tweets)} 条。")
                     consecutive_errors = 0 
@@ -208,14 +207,15 @@ def fetch_user_tweets(accounts: list, chunk_size: int, label: str) -> list:
     return all_tweets
 
 def fetch_global_hot_tweets() -> list:
+    """全网探测引擎，已替换为全英文国际暗号，完美免疫中文编码崩溃"""
     if not TWT_KEYS: return []
     yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
     all_tweets = []
     print(f"\n📡 [全网探测] 扫描出海与独立开发热点...", flush=True)
     
-    # 出海搞钱专属关键词
+    # 🚨 破解地雷 2：使用出海圈全英文高频 Tag，绕开 API 对中文的支持缺陷
     grok_queries = [
-        f'(出海 OR 独立开发 OR MRR OR 搞钱 OR 独立产品 OR 订阅制) since:{yesterday} min_faves:30 -is:retweet'
+        f'(buildinpublic OR indiehacker OR indiehackers OR MRR OR solopreneur OR SaaS) since:{yesterday} min_faves:30 -is:retweet'
     ]
     
     for idx, q in enumerate(grok_queries, 1):
@@ -227,15 +227,10 @@ def fetch_global_hot_tweets() -> list:
             try:
                 resp = requests.get(URL_TWTAPI, headers=headers, params=params_discovery, timeout=25)
                 if resp.status_code == 200:
-                    raw_json = resp.json() # 获取原始返回数据
+                    raw_json = resp.json()
                     tweets = parse_rapidapi_tweets(raw_json)
-                    
-                    # 🚨 增加：透视镜排错逻辑
-                    if len(tweets) == 0:
-                        print(f"    ⚠️ API返回成功，但找不到推文！原始数据前200字符: {str(raw_json)[:200]}", flush=True)
-                        
                     all_tweets.extend(tweets)
-                    print(f"    ✅ 探测成功，捕获 {len(tweets)} 条全网情报。")
+                    print(f"    ✅ 探测成功，捕获 {len(tweets)} 条全网出海情报。")
                     break
                 elif resp.status_code in [403, 404]: break 
                 else: time.sleep(2)
@@ -256,7 +251,7 @@ def fetch_top_comments(tweet_id: str) -> list:
     return []
 
 # ==============================================================================
-# 🚀 第二阶段：纯 XML 提示词与大模型调用 (搞钱出海重构版)
+# 🚀 第二阶段：纯 XML 提示词与大模型调用
 # ==============================================================================
 def _build_xml_prompt(combined_jsonl: str, today_str: str) -> str:
     return f"""
@@ -386,7 +381,7 @@ def parse_llm_xml(xml_text: str) -> dict:
     return data
 
 # ==============================================================================
-# 🚀 第三阶段：结构化渲染引擎 (出海搞钱版)
+# 🚀 第三阶段：结构化渲染引擎
 # ==============================================================================
 def render_feishu_card(parsed_data: dict, today_str: str):
     webhooks = get_feishu_webhooks()
@@ -421,7 +416,6 @@ def render_feishu_card(parsed_data: dict, today_str: str):
         elements.append({"tag": "markdown", "content": content.strip()})
         elements.append({"tag": "hr"})
 
-    # 替换为新的栏目名称
     add_list_section("搞钱雷达 (Money Radar)", "💰", parsed_data["money_radar"])
     add_list_section("风险与趋势 (Risk & Trends)", "📊", parsed_data["risk_and_trends"])
 
@@ -443,7 +437,7 @@ def render_feishu_card(parsed_data: dict, today_str: str):
     for url in webhooks:
         try:
             requests.post(url, json=card_payload, timeout=20)
-            print(f"[Push/Feishu] OK Card sent to {url.split('/')[-1][:8]}...", flush=True)
+            print(f"[Push/Feishu] OK Card sent...", flush=True)
         except Exception as e: print(f"[Push/Feishu] ERROR: {e}", flush=True)
 
 def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
@@ -531,7 +525,7 @@ def save_daily_data(today_str: str, post_objects: list, report_text: str):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"出海搞钱的中国人都在聊啥 v7.8 (垂直赛道重构版 - {mode_str})", flush=True)
+    print(f"出海搞钱的中国人都在聊啥 v7.9 (防断流特化版 - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     print(f"🔑 成功装载 {len(TWT_KEYS)} 把 RapidAPI 密钥，准备进入轮换并发", flush=True)
 
@@ -621,7 +615,7 @@ def main():
                 push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
                 
             save_daily_data(today_str, final_feed, xml_result)
-            print("\n🎉 V7.8 运行完毕！", flush=True)
+            print("\n🎉 V7.9 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
