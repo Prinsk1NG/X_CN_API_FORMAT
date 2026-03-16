@@ -502,15 +502,13 @@ def render_feishu_card(parsed_data: dict, today_str: str):
             print(f"[Push/Feishu] OK Card sent...", flush=True)
         except Exception as e: print(f"[Push/Feishu] ERROR: {e}", flush=True)
 
-def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
+def render_wechat_html(parsed_data: dict, today_str: str, cover_url: str = "") -> str:
     html_lines = []
     if cover_url: html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
     
-    if parsed_data["cover"].get("insight"):
-        # 将大模型生成的精彩短标题放在 Insight 旁边展示
-        base_title = parsed_data["cover"]["title"] or "今日核心动态"
-        header_text = f"💡 Insight | {base_title}"
-        html_lines.append(f'<div style="border-radius:8px;background:#FFF7E6;padding:12px 14px;margin:0 0 20px 0;color:#d97706;"><div style="font-weight:bold;margin-bottom:6px;">{header_text}</div><div>{parsed_data["cover"]["insight"]}</div></div>')
+    # 🚨 固定的顶部标头：去除冗余的 Insight 描述，只保留清爽的单行日期标题
+    header_text = f"💡 出海搞钱的中国人在聊啥 | {today_str}"
+    html_lines.append(f'<div style="border-radius:8px;background:#FFF7E6;padding:12px 14px;margin:0 0 20px 0;color:#d97706;"><div style="font-weight:bold;text-align:center;font-size:16px;">{header_text}</div></div>')
 
     def make_h3(title): return f'<h3 style="margin:24px 0 12px 0;font-size:18px;border-left:4px solid #4A90E2;padding-left:10px;color:#2c3e50;font-weight:bold;">{title}</h3>'
     def make_quote(content): return f'<div style="background:#f8f9fa;border-left:4px solid #8c98a4;padding:10px 14px;color:#555;font-size:15px;border-radius:0 4px 4px 0;margin:6px 0 10px 0;line-height:1.6;">{content}</div>'
@@ -700,9 +698,11 @@ def main():
             render_feishu_card(parsed_data, today_str)
                 
             if JIJYUN_WEBHOOK_URL:
-                html_content = render_wechat_html(parsed_data, cover_url)
-                # 🚨 根据你的要求：推送主标题固定为 "出海搞钱的中国人在聊啥 | 2026-03-xx"
-                wechat_title = f"出海搞钱的中国人在聊啥 | {today_str}"
+                # 🚨 渲染 HTML 时传入 today_str 参数
+                html_content = render_wechat_html(parsed_data, today_str, cover_url)
+                
+                # 🚨 将外部推送的主标题改为大模型总结的爆款网感标题
+                wechat_title = parsed_data["cover"]["title"] or f"出海搞钱的中国人在聊啥 | {today_str}"
                 push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
                 
             save_daily_data(today_str, final_feed, xml_result)
