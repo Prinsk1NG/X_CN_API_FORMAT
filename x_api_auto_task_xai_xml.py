@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v13.1 (出海搞钱锦囊 & 精准吃瓜版)
+x_api_auto_task_xai_xml.py  v13.2 (出海搞钱精修版: 强制5条 + 排版净化)
 Architecture: TwitterAPI.io -> PPLX -> xAI SDK (Grok-4.20-Multi-Agent) -> Clean UI
 """
 
@@ -47,39 +47,24 @@ WHALE_ACCOUNTS = [
 
 # ── 专家池 (90+人)：涵盖各大核心领域的高质量信源
 EXPERT_ACCOUNTS = list(set([
-    # AI 领域
     "dotey", "op7418", "Gorden_Sun", "xiaohu", "shao__meng", "thinkingjimmy", "goocarlos", 
     "Tumeng05", "AxtonLiu", "haibun", "vista8", "lijigang", "WaytoAGI", "xicilion", 
     "oran_ge", "AlchainHust", "SamuelQZQ", "elliotchen100", "Hayami_kiraa", "berryxia",
     "MANISH1027512", "joshesye", "zstmfhy", "bozhou_ai", "CuiMao", "RookieRicardoR", "wlzh",
-    
-    # 创业者领域
     "lxfater", "nateleex", "yan5xu", "santiagoyoungus", "Cydiar404", "JefferyTatsuya", 
     "seclink", "turingou", "virushuo", "fankaishuoai", "XDash", "idoubicc", "CoderJeffLee", 
     "tuturetom", "iamtonyzhu", "hongjun60", "Valley101_Qian", "binghe", "yyyole", "0xkakarot888", "rionaifantasy", "Wujizhuzhu",
-    
-    # SaaS / APP 产品领域
     "indie_maker_fox", "HongyuanCao", "nextify2024", "readyfor2025", "weijunext", "yihui_indie", 
     "JinsFavorites", "xiongchun007", "Junyu", "luoleiorg", "Plidezus", "jesselaunz", "lewangx", 
     "luinlee", "yupi996", "servasyy_ai", "XiaohuiAI666", "dingyi", "yanhua1010",
-    
-    # 出海与流量领域
     "gefei55", "lyc_zh", "AI_Jasonyu", "JourneymanChina", "dev_afei", "luobogooooo", 
     "GoSailGlobal", "chuhaiqu", "daluoseo", "hezhiyan7", "imaxichuhai", "canghe", "Nicole_yang88",
-    
-    # 独立开发者领域
     "austinit", "guishou_56", "9yearfish", "benshandebiao", "hwwaanng", "OwenYoungZh", 
     "waylybaye", "randyloop", "shengxj1", "FinanceYF5", "liuyi0922", "fkysly", "zhixianio", "Pluvio9yte",
     "tangjinzhou", "IndieDevHailey", "nopinduoduo",
-    
-    # OpenClaw 与 Agent
     "abskoop", "stark_nico99", "hongming731", "penny777", "quarktalksss", "Khazix0918", "steipete", "AI_jacksaku",
-    
-    # 知识分享领域
     "kasong2048", "cellinlab", "wshuyi", "Francis_YAO_", "realNyarime", "DigitalNomadLC", 
     "RocM301", "EvaCmore", "shuziyimin", "itangtalk", "knowledgefxg", "cj3214567667", "MindfulReturn", "Tz_2022", "EvanWritesX", "yaohui12138",
-    
-    # 副业领域
     "Astronaut_1216", "ityouknows", "expatlevi", "ll777547099", "PandaTalk8", "catmangox", "indiehackercase"
 ]))
 
@@ -208,7 +193,6 @@ def parse_tweets_recursive(data) -> list:
 
 def fetch_tweets_twitterapi_io(accounts: list, label: str) -> list:
     if not TWITTERAPI_IO_KEY: 
-        print(f"⚠️ 未配置 twitterapi_io_KEY，跳过{label}抓取", flush=True)
         return []
     
     yesterday = get_safe_yesterday()
@@ -232,10 +216,7 @@ def fetch_tweets_twitterapi_io(accounts: list, label: str) -> list:
                 tweets = parse_tweets_recursive(resp.json())
                 for t in tweets: t["t"] = parse_twitter_date(t.get("created_at", ""))
                 all_tweets.extend(tweets)
-                print(f"    ✅ 成功提取 {len(tweets)} 条。")
-            else:
-                print(f"    ⚠️ HTTP {resp.status_code}")
-        except Exception as e:
+        except Exception:
             pass
         time.sleep(1) 
         
@@ -271,7 +252,7 @@ def fetch_global_hot_tweets_twitterapi() -> list:
     return all_tweets
 
 # ==============================================================================
-# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20-Multi-Agent 出海吃瓜版)
+# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20-Multi-Agent 出海吃瓜精修版)
 # ==============================================================================
 def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     return f"""
@@ -280,23 +261,22 @@ def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> s
 
 【核心指令】
 1. 挑选出 3~5 个最有趣、最硬核或最有讨论价值的话题作为 <THEMES>。
-2. 🚨【吃瓜姿势】：在 <GOSSIP> 中给出你的专家级简短点评，必须限制在 30 字以内！
+2. 🚨【吃瓜姿势】：在 <GOSSIP> 中直接写点评内容，绝不要带“吃瓜姿势”等任何前缀！必须严格限制在 30 字以内！
 3. 🚨【四选二视角】：对于每个深度追踪的话题，你必须根据内容的真实情况，在“潜在机会、踩坑预警、核心共识、重大分歧”这四个视角中，【任选 1 到 2 个】最契合的角度来写。如果没有突出的观点，千万不要硬编，直接省略该标签。
-4. 🚨【拒绝宽泛】：在生成 <MARKET_RADAR> 时，如果说到赛道（比如机器人），不要宽泛地说“获得国家队支持”，必须明确指出具体是哪个细分赛道（如人形机器人、服务型机器人）或哪几家具体公司。让人一目了然。
+4. 🚨【拒绝宽泛】：在生成 <MARKET_RADAR> 时，如果说到赛道（比如机器人），必须明确指出具体是哪个细分赛道（如人形机器人、服务型机器人）或哪几家具体公司。绝对不允许写“某某赛道获支持”这种让人摸不到头脑的废话！
 
-【输出结构规范】(必须且只能输出严格的 XML，绝对不要使用反引号来包裹代码块！)
+【输出结构规范】(必须且只能输出严格的 XML)
 <REPORT>
-  <COVER title="10-20字极具吸引力的公众号网感爆款标题" prompt="100字英文图生图提示词" insight="30字内核心洞察，中文"/>
+  <COVER title="15-20字极具吸引力的公众号网感爆款标题" prompt="100字英文图生图提示词"/>
   <PULSE>用一句话总结今日最核心的 1-2 个全网科技/出海商业动态信号。</PULSE>
   
   <THEMES>
     <THEME type="new" emoji="🔥">
       <TITLE>话题名称：简短描述</TITLE>
       <NARRATIVE>一句话说明：到底发生了什么、什么在变化</NARRATIVE>
-      <TWEET account="X账号名" role="中文身份标签">【严禁纯英文】以中文为主精练大佬的实战言论或爆料</TWEET>
-      <TWEET account="..." role="...">...</TWEET>
+      <TWEET account="X账号名" role="中文身份标签">以中文为主精练大佬的实战言论或爆料</TWEET>
       
-      <GOSSIP>🍉吃瓜姿势：专家点评，必须严格限制在30字以内！</GOSSIP>
+      <GOSSIP>直接写专家点评内容，绝不要加任何前缀！必须限制在30字以内！</GOSSIP>
       
       <!-- 🚨 必须从以下 4 个角度中，任选 1 到 2 个最契合的进行输出。没有突出的就不写，直接省略该标签！ -->
       <OPPORTUNITY>潜在机会：具体的红利、赛道方向或搞钱思路</OPPORTUNITY>
@@ -307,9 +287,9 @@ def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> s
   </THEMES>
 
   <MARKET_RADAR>
-    <!-- 🚨 必须极度具体！必须指明具体公司、具体细分赛道，或写出具体数据！ -->
+    <!-- 🚨 必须极度具体！必须指明具体公司名或明确的细分赛道！ -->
     <ITEM category="硬核快讯">重磅融资、财报等客观事实，必须有明确的主体和数字。</ITEM>
-    <ITEM category="行业风向">巨头具体动作、明确的细分市场洞察。</ITEM>
+    <ITEM category="行业风向">巨头具体动作、极其明确的细分市场洞察。</ITEM>
   </MARKET_RADAR>
 
   <MONEY_TIPS>
@@ -320,7 +300,12 @@ def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> s
   </MONEY_TIPS>
 
   <TOP_PICKS>
+    <!-- 🚨 【强制纪律】必须严格挑选出正好 5 条全网最精彩的推文！允许与上面的 THEMES 重复。少于 5 条将被视为严重失败！ -->
     <TWEET account="..." role="...">【严禁纯英文】价值最大、最有趣或点赞极高的原味金句（中文精译）</TWEET>
+    <TWEET account="..." role="...">...</TWEET>
+    <TWEET account="..." role="...">...</TWEET>
+    <TWEET account="..." role="...">...</TWEET>
+    <TWEET account="..." role="...">...</TWEET>
   </TOP_PICKS>
 </REPORT>
 
@@ -341,7 +326,6 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     data = combined_jsonl[:max_data_chars] if len(combined_jsonl) > max_data_chars else combined_jsonl
     prompt = _build_xml_prompt(data, today_str, macro_info)
     
-    # 🚨 升级为官方推荐的多智能体聚类模型
     model_name = "grok-4.20-multi-agent-beta-0309" 
 
     print(f"\n[LLM/xAI] Requesting {model_name} via Official xai-sdk...", flush=True)
@@ -354,7 +338,6 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
             chat.append(user(prompt))
             result = chat.sample().content.strip()
             
-            # 使用安全的量词语法匹配三个反引号，避免引发 Markdown 截断和语法错误
             result = re.sub(r'^`{3}(?:xml|jsonl|json)?\n', '', result, flags=re.MULTILINE)
             result = re.sub(r'^`{3}\n?', '', result, flags=re.MULTILINE)
             
@@ -366,14 +349,14 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     return ""
 
 def parse_llm_xml(xml_text: str) -> dict:
-    data = {"cover": {"title": "", "prompt": "", "insight": ""}, "pulse": "", "themes": [], "market_radar": [], "money_tips": [], "top_picks": []}
+    data = {"cover": {"title": "", "prompt": ""}, "pulse": "", "themes": [], "market_radar": [], "money_tips": [], "top_picks": []}
     if not xml_text: return data
 
-    cover_match = re.search(r'<COVER\s+title=[\'"“”](.*?)[\'"“”]\s+prompt=[\'"“”](.*?)[\'"“”]\s+insight=[\'"“”](.*?)[\'"“”]\s*/?>', xml_text, re.IGNORECASE | re.DOTALL)
+    cover_match = re.search(r'<COVER\s+title=[\'"“”](.*?)[\'"“”]\s+prompt=[\'"“”](.*?)[\'"“”]\s*/?>', xml_text, re.IGNORECASE | re.DOTALL)
     if not cover_match:
-        cover_match = re.search(r'<COVER\s+title="(.*?)"\s+prompt="(.*?)"\s+insight="(.*?)"\s*/?>', xml_text, re.IGNORECASE | re.DOTALL)
+        cover_match = re.search(r'<COVER\s+title="(.*?)"\s+prompt="(.*?)"\s*/?>', xml_text, re.IGNORECASE | re.DOTALL)
     if cover_match: 
-        data["cover"] = {"title": cover_match.group(1).strip(), "prompt": cover_match.group(2).strip(), "insight": cover_match.group(3).strip()}
+        data["cover"] = {"title": cover_match.group(1).strip(), "prompt": cover_match.group(2).strip()}
         
     pulse_match = re.search(r'<PULSE>(.*?)</PULSE>', xml_text, re.IGNORECASE | re.DOTALL)
     if pulse_match: data["pulse"] = pulse_match.group(1).strip()
@@ -398,9 +381,10 @@ def parse_llm_xml(xml_text: str) -> dict:
             for t_match in re.finditer(r'<TWEET\s+account="(.*?)"\s+role="(.*?)">(.*?)</TWEET>', theme_body, re.IGNORECASE | re.DOTALL):
                 tweets.append({"account": t_match.group(1).strip(), "role": t_match.group(2).strip(), "content": t_match.group(3).strip()})
         
-        # 解析全新的独立模块
+        # 🚨 暴力清洗“🍉吃瓜：”等前缀，防止重叠
         gossip_match = re.search(r'<GOSSIP>(.*?)</GOSSIP>', theme_body, re.IGNORECASE | re.DOTALL)
         gossip = gossip_match.group(1).strip() if gossip_match else ""
+        gossip = re.sub(r'^(🍉\s*)?(吃瓜姿势|吃瓜|专家点评|点评|🔥)[:：]?\s*', '', gossip).strip()
 
         opp_match = re.search(r'<OPPORTUNITY>(.*?)</OPPORTUNITY>', theme_body, re.IGNORECASE | re.DOTALL)
         opportunity = opp_match.group(1).strip() if opp_match else ""
@@ -459,7 +443,6 @@ def render_feishu_card(parsed_data: dict, today_str: str):
             for t in theme["tweets"]:
                 theme_md += f"🗣️ **@{t['account']} | {t['role']}**\n<font color='grey'>“{t['content']}”</font>\n"
             
-            # 🚨 动态渲染吃瓜姿势与四选二角度
             if theme.get("gossip"): theme_md += f"<font color='red'>**🍉 吃瓜姿势：**</font> {theme['gossip']}\n"
             if theme.get("opportunity"): theme_md += f"<font color='green'>**🎯 潜在机会：**</font> {theme['opportunity']}\n"
             if theme.get("risk"): theme_md += f"<font color='red'>**⚠️ 踩坑预警：**</font> {theme['risk']}\n"
@@ -506,10 +489,6 @@ def render_wechat_html(parsed_data: dict, today_str: str, cover_url: str = "") -
     html_lines = []
     if cover_url: html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
     
-    # 🚨 固定的顶部标头：去除冗余的 Insight 描述，只保留清爽的单行日期标题
-    header_text = f"💡 出海搞钱的中国人在聊啥 | {today_str}"
-    html_lines.append(f'<div style="border-radius:8px;background:#FFF7E6;padding:12px 14px;margin:0 0 20px 0;color:#d97706;"><div style="font-weight:bold;text-align:center;font-size:16px;">{header_text}</div></div>')
-
     def make_h3(title): return f'<h3 style="margin:24px 0 12px 0;font-size:18px;border-left:4px solid #4A90E2;padding-left:10px;color:#2c3e50;font-weight:bold;">{title}</h3>'
     def make_quote(content): return f'<div style="background:#f8f9fa;border-left:4px solid #8c98a4;padding:10px 14px;color:#555;font-size:15px;border-radius:0 4px 4px 0;margin:6px 0 10px 0;line-height:1.6;">{content}</div>'
 
@@ -529,7 +508,6 @@ def render_wechat_html(parsed_data: dict, today_str: str, cover_url: str = "") -
                 html_lines.append(f'<p style="margin:8px 0 2px 0;font-size:14px;font-weight:bold;color:#2c3e50;">🗣️ @{t["account"]} <span style="color:#94a3b8;font-weight:normal;">| {t["role"]}</span></p>')
                 html_lines.append(make_quote(f'"{t["content"]}"'))
             
-            # 🚨 渲染吃瓜姿势与四选二的动态角度
             if theme.get("gossip"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#b91c1c;">🍉 吃瓜姿势：</strong>{theme["gossip"]}</p>')
             if theme.get("opportunity"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#f0fdf4; padding: 8px 12px; border-radius: 4px;"><strong style="color:#16a34a;">🎯 潜在机会：</strong>{theme["opportunity"]}</p>')
             if theme.get("risk"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#dc2626;">⚠️ 踩坑预警：</strong>{theme["risk"]}</p>')
@@ -622,7 +600,7 @@ def update_account_stats(final_feed: list, parsed_data: dict):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"出海搞钱吃瓜版 v13.1 (出海锦囊 + 精准吃瓜 - {mode_str})", flush=True)
+    print(f"出海搞钱吃瓜版 v13.2 (精修排版与防偷懒版 - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     
     if not TWITTERAPI_IO_KEY:
@@ -698,17 +676,17 @@ def main():
             render_feishu_card(parsed_data, today_str)
                 
             if JIJYUN_WEBHOOK_URL:
-                # 🚨 渲染 HTML 时传入 today_str 参数
+                # 🚨 V13.2 渲染 HTML 并配置最终推文标题
                 html_content = render_wechat_html(parsed_data, today_str, cover_url)
                 
-                # 🚨 将外部推送的主标题改为大模型总结的爆款网感标题
-                wechat_title = parsed_data["cover"]["title"] or f"出海搞钱的中国人在聊啥 | {today_str}"
+                base_title = parsed_data["cover"]["title"] or "今日核心动态"
+                wechat_title = f"{base_title} | 出海搞钱的中国人在聊啥"
                 push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
                 
             save_daily_data(today_str, final_feed, xml_result)
             update_account_stats(final_feed, parsed_data)
             
-            print("\n🎉 V13.1 运行完毕！", flush=True)
+            print("\n🎉 V13.2 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
