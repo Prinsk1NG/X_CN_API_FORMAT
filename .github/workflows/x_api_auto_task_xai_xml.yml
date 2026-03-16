@@ -1,4 +1,4 @@
-name: Indie Hacker & Global Market Daily (v10.3)
+name: Global Chinese Tech & AI Daily (v13.0)
 
 on:
   # 每天定时执行 (UTC时间 00:00，对应北京时间早上 08:00)
@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           
-          # V10.3 纯API版依赖极度精简，去掉了耗时的浏览器内核安装
+          # V13.0 依然保持极简依赖
           pip install requests xai-sdk
           
       - name: Run Auto Task Script
@@ -39,13 +39,8 @@ jobs:
           # 🚨 1. 核心推特抓取密钥 (TwitterAPI.io)
           twitterapi_io_KEY: ${{ secrets.twitterapi_io_KEY }}
           
-          # 🚨 2. 外部情报源 API Keys (Perplexity & Tavily轮换池)
+          # 🚨 2. 客观事实情报源 API Key
           PPLX_API_KEY: ${{ secrets.PPLX_API_KEY }}
-          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
-          TAVILY_API_KEY_2: ${{ secrets.TAVILY_API_KEY_2 }}
-          TAVILY_API_KEY_3: ${{ secrets.TAVILY_API_KEY_3 }}
-          TAVILY_API_KEY_4: ${{ secrets.TAVILY_API_KEY_4 }}
-          TAVILY_API_KEY_5: ${{ secrets.TAVILY_API_KEY_5 }}
 
           # 🚨 3. 大模型与图床 API Keys
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
