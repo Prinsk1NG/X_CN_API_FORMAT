@@ -1,11 +1,15 @@
-name: Digital Nomad Daily Report (xAI v7.8)
+name: Indie Hacker & Global Market Daily (v10.3)
 
 on:
+  # 每天定时执行 (UTC时间 00:00，对应北京时间早上 08:00)
+  schedule:
+    - cron: '0 0 * * *'
+  
   # 允许在 GitHub Actions 页面手动点击运行，并支持传入测试参数
   workflow_dispatch:
     inputs:
       test_mode:
-        description: '开启测试模式 (只扫极少数人，用于快速验证排版)'
+        description: '开启测试模式 (快速验证功能)'
         required: false
         type: boolean
         default: false
@@ -26,34 +30,46 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
+          
+          # V10.3 纯API版依赖极度精简，去掉了耗时的浏览器内核安装
           pip install requests xai-sdk
           
       - name: Run Auto Task Script
         env:
-          XAI_API_KEY: ${{ secrets.xAI_API_KEY }}
+          # 🚨 1. 核心推特抓取密钥 (TwitterAPI.io)
+          twitterapi_io_KEY: ${{ secrets.twitterapi_io_KEY }}
+          
+          # 🚨 2. 外部情报源 API Keys (Perplexity & Tavily轮换池)
+          PPLX_API_KEY: ${{ secrets.PPLX_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          TAVILY_API_KEY_2: ${{ secrets.TAVILY_API_KEY_2 }}
+          TAVILY_API_KEY_3: ${{ secrets.TAVILY_API_KEY_3 }}
+          TAVILY_API_KEY_4: ${{ secrets.TAVILY_API_KEY_4 }}
+          TAVILY_API_KEY_5: ${{ secrets.TAVILY_API_KEY_5 }}
+
+          # 🚨 3. 大模型与图床 API Keys
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           SF_API_KEY: ${{ secrets.SF_API_KEY }}
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+          
+          # 🚨 4. 推送 Webhooks
           FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          FEISHU_WEBHOOK_URL_1: ${{ secrets.FEISHU_WEBHOOK_URL_1 }}
+          FEISHU_WEBHOOK_URL_2: ${{ secrets.FEISHU_WEBHOOK_URL_2 }}
+          FEISHU_WEBHOOK_URL_3: ${{ secrets.FEISHU_WEBHOOK_URL_3 }}
           JIJYUN_WEBHOOK_URL: ${{ secrets.JIJYUN_WEBHOOK_URL }}
+          
+          # 控制参数
           TEST_MODE_ENV: ${{ github.event.inputs.test_mode }}
           
-          # 🚨 智能密钥池：主号 + 小号轮换分流
-          TWTAPI_KEY: ${{ secrets.TWTAPI_KEY }}
-          TWTAPI_KEY_2: ${{ secrets.TWTAPI_KEY_2 }}
-          TWTAPI_KEY_3: ${{ secrets.TWTAPI_KEY_3 }}
-          # 如果你以后白嫖了更多的 RapidAPI 账号，只需要在 GitHub Secrets 里建好，取消下方注释即可：
-          # TWTAPI_KEY_3: ${{ secrets.TWTAPI_KEY_3 }}
-          # TWTAPI_KEY_4: ${{ secrets.TWTAPI_KEY_4 }}
-          
         run: |
-          # 请确保这里的脚本名字和你仓库里的 Python 文件名完全一致！
+          # 确保这里执行的文件名与你仓库里的 Python 主程序文件名完全一致！
           python x_api_auto_task_xai_xml.py
 
-      # 将每天抓取到的数据打包保存下来，方便日后查阅和复盘
       - name: Upload Data Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: daily-data
           path: data/
-          retention-days: 7
+          retention-days: 30
