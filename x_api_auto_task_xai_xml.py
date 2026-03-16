@@ -251,8 +251,8 @@ def fetch_global_hot_tweets_twitterapi() -> list:
     
     print(f"\n📡 [全网探测] 扫描全球 X.com 高赞中文神仙打架与突发热点...", flush=True)
     
-    # 策略 1: 扫描过去 24 小时全网任何点赞大于 300 的纯中文推文 (无视账号列表，发现盲区)
-    # 策略 2: 适当降低门槛 (赞>100)，聚焦在包含“科技、创业、搞钱、AI”等泛商业词汇的中文帖
+    # 策略 1: 扫描过去 24 小时全网任何点赞大于 300 的纯中文推文
+    # 策略 2: 适当降低门槛 (赞>100)，聚焦在包含泛商业词汇的中文帖
     queries = [
         f'lang:zh since:{yesterday} min_faves:300 -filter:retweets',
         f'(AI OR 科技 OR 创业 OR 商业 OR 搞钱 OR 独立开发 OR 马斯克 OR 开源) lang:zh since:{yesterday} min_faves:100 -filter:retweets'
@@ -293,7 +293,7 @@ def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> s
 1. X平台一手推文（JSONL）是【绝对的主干】，用于生成 <THEMES> 和 <TOP_PICKS>。
 2. Perplexity 提供的情报仅用于填充 <MARKET_RADAR> 中的客观数字事实，绝不能用二手媒体报道冲淡推特大佬的干货！
 
-【输出结构规范】(必须且只能输出严格的 XML，不要包含 markdown 代码块如 ```xml)
+【输出结构规范】(必须且只能输出严格的 XML，绝对不要使用反引号来包裹代码块！)
 <REPORT>
   <COVER title="10-20字极具吸引力的单主题爆款标题" prompt="100字英文图生图提示词" insight="30字内核心洞察，中文"/>
   <PULSE>用一句话总结今日最核心的 1-2 个全网科技/商业动态信号。</PULSE>
@@ -347,7 +347,7 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     data = combined_jsonl[:max_data_chars] if len(combined_jsonl) > max_data_chars else combined_jsonl
     prompt = _build_xml_prompt(data, today_str, macro_info)
     
-    # 🚨 升级为官方推荐的多智能体聚类模型 (适合长文本与主题提炼)
+    # 🚨 升级为官方推荐的多智能体聚类模型
     model_name = "grok-4.20-multi-agent-beta-0309" 
 
     print(f"\n[LLM/xAI] Requesting {model_name} via Official xai-sdk...", flush=True)
@@ -360,5 +360,358 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
             chat.append(user(prompt))
             result = chat.sample().content.strip()
             
-            # 清理可能的 Markdown 包装
-            result = re.sub(r'^
+            # 🚨 核心修复：使用安全的量词语法匹配三个反引号，避免引发 Markdown 截断和语法错误！
+            result = re.sub(r'^`{3}(?:xml|jsonl|json)?\n', '', result, flags=re.MULTILINE)
+            result = re.sub(r'^`{3}\n?', '', result, flags=re.MULTILINE)
+            
+            print(f"[LLM/xAI] OK Response received ({len(result)} chars)", flush=True)
+            return result
+        except Exception as e:
+            print(f"[LLM/xAI] Attempt {attempt} failed: {e}", flush=True)
+            time.sleep(2 ** attempt)
+    return ""
+
+def parse_llm_xml(xml_text: str) -> dict:
+    data = {"cover": {"title": "", "prompt": "", "insight": ""}, "pulse": "", "themes": [], "market_radar": [], "risk_and_trends": [], "top_picks": []}
+    if not xml_text: return data
+
+    cover_match = re.search(r'<COVER\s+title=[\'"“”](.*?)[\'"“”]\s+prompt=[\'"“”](.*?)[\'"“”]\s+insight=[\'"“”](.*?)[\'"“”]\s*/?>', xml_text, re.IGNORECASE | re.DOTALL)
+    if not cover_match:
+        cover_match = re.search(r'<COVER\s+title="(.*?)"\s+prompt="(.*?)"\s+insight="(.*?)"\s*/?>', xml_text, re.IGNORECASE | re.DOTALL)
+    if cover_match: 
+        data["cover"] = {"title": cover_match.group(1).strip(), "prompt": cover_match.group(2).strip(), "insight": cover_match.group(3).strip()}
+        
+    pulse_match = re.search(r'<PULSE>(.*?)</PULSE>', xml_text, re.IGNORECASE | re.DOTALL)
+    if pulse_match: data["pulse"] = pulse_match.group(1).strip()
+        
+    for theme_match in re.finditer(r'<THEME([^>]*)>(.*?)</THEME>', xml_text, re.IGNORECASE | re.DOTALL):
+        attrs = theme_match.group(1)
+        theme_body = theme_match.group(2)
+        
+        emoji_m = re.search(r'emoji\s*=\s*[\'"“”](.*?)[\'"“”]', attrs, re.IGNORECASE)
+        emoji = emoji_m.group(1).strip() if emoji_m else "🔥"
+        
+        t_tag = re.search(r'<TITLE>(.*?)</TITLE>', theme_body, re.IGNORECASE | re.DOTALL)
+        theme_title = t_tag.group(1).strip() if t_tag else ""
+        if not theme_title:
+            title_m = re.search(r'title\s*=\s*[\'"“”](.*?)[\'"“”]', attrs, re.IGNORECASE)
+            theme_title = title_m.group(1).strip() if title_m else "未命名主题"
+            
+        narrative_match = re.search(r'<NARRATIVE>(.*?)</NARRATIVE>', theme_body, re.IGNORECASE | re.DOTALL)
+        narrative = narrative_match.group(1).strip() if narrative_match else ""
+        
+        tweets = []
+        for t_match in re.finditer(r'<TWEET\s+account=[\'"“”](.*?)[\'"“”]\s+role=[\'"“”](.*?)[\'"“”]>(.*?)</TWEET>', theme_body, re.IGNORECASE | re.DOTALL):
+            tweets.append({"account": t_match.group(1).strip(), "role": t_match.group(2).strip(), "content": t_match.group(3).strip()})
+        if not tweets:
+            for t_match in re.finditer(r'<TWEET\s+account="(.*?)"\s+role="(.*?)">(.*?)</TWEET>', theme_body, re.IGNORECASE | re.DOTALL):
+                tweets.append({"account": t_match.group(1).strip(), "role": t_match.group(2).strip(), "content": t_match.group(3).strip()})
+        
+        comments_match = re.search(r'<COMMENTS>(.*?)</COMMENTS>', theme_body, re.IGNORECASE | re.DOTALL)
+        comments = comments_match.group(1).strip() if comments_match else ""
+
+        opp_match = re.search(r'<OPPORTUNITY>(.*?)</OPPORTUNITY>', theme_body, re.IGNORECASE | re.DOTALL)
+        opportunity = opp_match.group(1).strip() if opp_match else ""
+        risk_match = re.search(r'<RISK>(.*?)</RISK>', theme_body, re.IGNORECASE | re.DOTALL)
+        risk = risk_match.group(1).strip() if risk_match else ""
+        
+        data["themes"].append({
+            "type": "new", "emoji": emoji, "title": theme_title, "narrative": narrative, "tweets": tweets,
+            "comments": comments, "opportunity": opportunity, "risk": risk
+        })
+        
+    def extract_items(tag_name, target_list):
+        block_match = re.search(rf'<{tag_name}>(.*?)</{tag_name}>', xml_text, re.IGNORECASE | re.DOTALL)
+        if block_match:
+            for item in re.finditer(r'<ITEM\s+category=[\'"“”](.*?)[\'"“”]>(.*?)</ITEM>', block_match.group(1), re.IGNORECASE | re.DOTALL):
+                target_list.append({"category": item.group(1).strip(), "content": item.group(2).strip()})
+
+    extract_items("MARKET_RADAR", data["market_radar"])
+    extract_items("RISK_AND_TRENDS", data["risk_and_trends"])
+
+    picks_match = re.search(r'<TOP_PICKS>(.*?)</TOP_PICKS>', xml_text, re.IGNORECASE | re.DOTALL)
+    if picks_match:
+        picks_content = picks_match.group(1)
+        for t_match in re.finditer(r'<TWEET\s+account=[\'"“”](.*?)[\'"“”]\s+role=[\'"“”](.*?)[\'"“”]>(.*?)</TWEET>', picks_content, re.IGNORECASE | re.DOTALL):
+            data["top_picks"].append({"account": t_match.group(1).strip(), "role": t_match.group(2).strip(), "content": t_match.group(3).strip()})
+        if not data["top_picks"]:
+            for t_match in re.finditer(r'<TWEET[^>]*account="(.*?)"[^>]*role="(.*?)"[^>]*>(.*?)</TWEET>', picks_content, re.IGNORECASE | re.DOTALL):
+                data["top_picks"].append({"account": t_match.group(1).strip(), "role": t_match.group(2).strip(), "content": t_match.group(3).strip()})
+            
+    return data
+
+# ==============================================================================
+# 🚀 第三阶段：结构化渲染引擎 & 账号复盘数据库
+# ==============================================================================
+def render_feishu_card(parsed_data: dict, today_str: str):
+    webhooks = get_feishu_webhooks()
+    if not webhooks or not parsed_data.get("pulse"): return
+
+    elements = []
+    elements.append({"tag": "markdown", "content": f"**▌ ⚡️ 今日看板 (The Pulse)**\n<font color='grey'>{parsed_data['pulse']}</font>"})
+    elements.append({"tag": "hr"})
+
+    if parsed_data["themes"]:
+        elements.append({"tag": "markdown", "content": "**▌ 🧠 深度叙事追踪**"})
+        for idx, theme in enumerate(parsed_data["themes"]):
+            theme_md = f"**{theme['emoji']} {theme['title']}**\n"
+            theme_md += f"<font color='grey'>💡 核心判断：{theme['narrative']}</font>\n"
+            
+            for t in theme["tweets"]:
+                theme_md += f"🗣️ **@{t['account']} | {t['role']}**\n<font color='grey'>“{t['content']}”</font>\n"
+            
+            if theme.get("comments"): theme_md += f"<font color='red'>**🔥 专家点评：**</font> {theme['comments']}\n"
+            if theme.get("opportunity"): theme_md += f"<font color='green'>**🎯 潜在机会：**</font> {theme['opportunity']}\n"
+            if theme.get("risk"): theme_md += f"<font color='red'>**⚠️ 踩坑预警：**</font> {theme['risk']}\n"
+            
+            elements.append({"tag": "markdown", "content": theme_md.strip()})
+            if idx < len(parsed_data["themes"]) - 1: elements.append({"tag": "hr"})
+        elements.append({"tag": "hr"})
+
+    def add_list_section(title, icon, items):
+        if not items: return
+        content = f"**▌ {icon} {title}**\n\n"
+        for item in items:
+            content += f"👉 **{item['category']}**：<font color='grey'>{item['content']}</font>\n"
+        elements.append({"tag": "markdown", "content": content.strip()})
+        elements.append({"tag": "hr"})
+
+    add_list_section("市场雷达 (Market Radar)", "💰", parsed_data["market_radar"])
+    add_list_section("风险与趋势 (Risk & Trends)", "📊", parsed_data["risk_and_trends"])
+
+    if parsed_data["top_picks"]:
+        picks_md = "**▌ 📣 今日精选推文 (Top 5 Picks)**\n"
+        for t in parsed_data["top_picks"]:
+            picks_md += f"\n🗣️ **@{t['account']} | {t['role']}**\n<font color='grey'>\"{t['content']}\"</font>\n"
+        elements.append({"tag": "markdown", "content": picks_md.strip()})
+
+    card_payload = {
+        "msg_type": "interactive",
+        "card": {
+            "config": {"wide_screen_mode": True, "enable_forward": True},
+            "header": {"title": {"content": f"昨晚大佬们在聊啥 | {today_str}", "tag": "plain_text"}, "template": "blue"},
+            "elements": elements + [{"tag": "note", "elements": [{"tag": "plain_text", "content": "Powered by TwitterAPI.io + Perplexity + xAI"}]}]
+        }
+    }
+
+    for url in webhooks:
+        try:
+            requests.post(url, json=card_payload, timeout=20)
+            print(f"[Push/Feishu] OK Card sent...", flush=True)
+        except Exception as e: print(f"[Push/Feishu] ERROR: {e}", flush=True)
+
+def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
+    html_lines = []
+    if cover_url: html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
+    
+    if parsed_data["cover"].get("insight"):
+        header_text = "💡 Insight"
+        html_lines.append(f'<div style="border-radius:8px;background:#FFF7E6;padding:12px 14px;margin:0 0 20px 0;color:#d97706;"><div style="font-weight:bold;margin-bottom:6px;">{header_text}</div><div>{parsed_data["cover"]["insight"]}</div></div>')
+
+    def make_h3(title): return f'<h3 style="margin:24px 0 12px 0;font-size:18px;border-left:4px solid #4A90E2;padding-left:10px;color:#2c3e50;font-weight:bold;">{title}</h3>'
+    def make_quote(content): return f'<div style="background:#f8f9fa;border-left:4px solid #8c98a4;padding:10px 14px;color:#555;font-size:15px;border-radius:0 4px 4px 0;margin:6px 0 10px 0;line-height:1.6;">{content}</div>'
+
+    html_lines.append(make_h3("⚡️ 今日看板 (The Pulse)"))
+    html_lines.append(make_quote(parsed_data.get('pulse', '')))
+
+    if parsed_data["themes"]:
+        html_lines.append(make_h3("🧠 深度叙事追踪"))
+        for idx, theme in enumerate(parsed_data["themes"]):
+            if idx > 0:
+                html_lines.append('<hr style="border:none;border-top:1px solid #cbd5e1;margin:32px 0 24px 0;"/>')
+
+            html_lines.append(f'<p style="font-weight:bold;font-size:16px;color:#1e293b;margin:16px 0 8px 0;">{theme["emoji"]} {theme["title"]}</p>')
+            html_lines.append(f'<div style="background:#f8fafc; padding:10px 12px; border-radius:6px; margin:0 0 8px 0; font-size:14px; color:#334155;"><strong>💡 核心判断：</strong>{theme["narrative"]}</div>')
+                
+            for t in theme["tweets"]:
+                html_lines.append(f'<p style="margin:8px 0 2px 0;font-size:14px;font-weight:bold;color:#2c3e50;">🗣️ @{t["account"]} <span style="color:#94a3b8;font-weight:normal;">| {t["role"]}</span></p>')
+                html_lines.append(make_quote(f'"{t["content"]}"'))
+            
+            if theme.get("comments"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#b91c1c;">🔥 专家点评：</strong>{theme["comments"]}</p>')
+            if theme.get("opportunity"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#f0fdf4; padding: 8px 12px; border-radius: 4px;"><strong style="color:#16a34a;">🎯 机会启示：</strong>{theme["opportunity"]}</p>')
+            if theme.get("risk"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#dc2626;">⚠️ 踩坑预警：</strong>{theme["risk"]}</p>')
+
+    def make_list_section(title, items):
+        if not items: return
+        html_lines.append(make_h3(title))
+        for item in items: 
+            html_lines.append(f'<p style="margin:10px 0;font-size:15px;line-height:1.6;">👉 <strong style="color:#2c3e50;">{item["category"]}：</strong><span style="color:#333;">{item["content"]}</span></p>')
+
+    make_list_section("💰 市场雷达 (Market Radar)", parsed_data["market_radar"])
+    make_list_section("📊 风险与趋势 (Risk & Trends)", parsed_data["risk_and_trends"])
+
+    if parsed_data["top_picks"]:
+        html_lines.append(make_h3("📣 今日精选推文 (Top 5 Picks)"))
+        for t in parsed_data["top_picks"]:
+             html_lines.append(f'<p style="margin:12px 0 4px 0;font-size:14px;font-weight:bold;color:#2c3e50;">🗣️ @{t["account"]} <span style="color:#94a3b8;font-weight:normal;">| {t["role"]}</span></p>')
+             html_lines.append(make_quote(f'"{t["content"]}"'))
+
+    return "".join(html_lines)
+
+# ==============================================================================
+# 附加工具 (生图、图床与推送)
+# ==============================================================================
+def generate_cover_image(prompt):
+    if not SF_API_KEY or not prompt: return ""
+    try:
+        resp = requests.post(URL_SF_IMAGE, headers={"Authorization": f"Bearer {SF_API_KEY}", "Content-Type": "application/json"}, json={"model": "black-forest-labs/FLUX.1-schnell", "prompt": prompt, "n": 1, "image_size": "1024x576"}, timeout=60)
+        if resp.status_code == 200: return resp.json().get("images", [{}])[0].get("url") or resp.json().get("data", [{}])[0].get("url")
+    except: pass
+    return ""
+
+def upload_to_imgbb_via_url(sf_url):
+    if not IMGBB_API_KEY or not sf_url: return sf_url 
+    try:
+        img_resp = requests.get(sf_url, timeout=30)
+        img_b64 = base64.b64encode(img_resp.content).decode("utf-8")
+        upload_resp = requests.post(URL_IMGBB, data={"key": IMGBB_API_KEY, "image": img_b64}, timeout=45)
+        if upload_resp.status_code == 200: return upload_resp.json()["data"]["url"]
+    except: pass
+    return sf_url
+
+def push_to_jijyun(html_content, title, cover_url=""):
+    if not JIJYUN_WEBHOOK_URL: return
+    try: 
+        requests.post(JIJYUN_WEBHOOK_URL, json={"title": title, "author": "Prinski", "html_content": html_content, "cover_jpg": cover_url}, timeout=30)
+        print(f"[Push/WeChat] OK Sent to Jijyun", flush=True)
+    except Exception as e: print(f"  ⚠️ 推送机语警告: {e}", flush=True)
+
+def save_daily_data(today_str: str, post_objects: list, report_text: str):
+    data_dir = Path(f"data/{today_str}")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    combined_txt = "\n".join(json.dumps(obj, ensure_ascii=False) for obj in post_objects)
+    (data_dir / "combined.txt").write_text(combined_txt, encoding="utf-8")
+    if report_text: (data_dir / "daily_report.txt").write_text(report_text, encoding="utf-8")
+
+def update_account_stats(final_feed: list, parsed_data: dict):
+    stats_file = Path("data/account_stats.json")
+    stats = {}
+    if stats_file.exists():
+        try: stats = json.loads(stats_file.read_text(encoding="utf-8"))
+        except: pass
+    
+    today_str = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d")
+    used_accounts = set()
+    for theme in parsed_data.get("themes", []):
+        for t in theme.get("tweets", []):
+            used_accounts.add(t.get("account", "").lower())
+    for t in parsed_data.get("top_picks", []):
+        used_accounts.add(t.get("account", "").lower())
+        
+    for t in final_feed:
+        acc = t.get("a", "unknown").lower()
+        if acc not in stats:
+            stats[acc] = {"fetched_days": 0, "total_tweets": 0, "used_in_reports": 0, "last_active": ""}
+        stats[acc]["total_tweets"] += 1
+        stats[acc]["last_active"] = today_str
+        
+    for acc in used_accounts:
+        acc_clean = acc.replace("@", "")
+        if acc_clean in stats:
+            stats[acc_clean]["used_in_reports"] += 1
+            
+    stats_file.parent.mkdir(parents=True, exist_ok=True)
+    stats_file.write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[Stats] 已更新账号质量数据库 (account_stats.json)，记录 {len(used_accounts)} 位今日之星。")
+
+def main():
+    print("=" * 60, flush=True)
+    mode_str = "测试模式" if TEST_MODE else "全量模式"
+    print(f"昨晚大佬们在聊啥 v13.0 (全网中文热点探测 + Multi-Agent 聚类版 - {mode_str})", flush=True)
+    print("=" * 60, flush=True)
+    
+    if not TWITTERAPI_IO_KEY:
+        print("❌ 致命错误: 未配置 twitterapi_io_KEY，程序无法继续！", flush=True)
+        return
+
+    today_str, _ = get_dates()
+    all_raw_tweets = []
+    
+    # 🚨 1. 抓取巨鲸池与专家池
+    all_raw_tweets.extend(fetch_tweets_twitterapi_io(WHALE_ACCOUNTS, label="巨鲸"))
+    all_raw_tweets.extend(fetch_tweets_twitterapi_io(EXPERT_ACCOUNTS, label="专家"))
+    
+    # 🚨 2. 抓取全网高赞中文热点 (打破列表盲区)
+    all_raw_tweets.extend(fetch_global_hot_tweets_twitterapi())
+    
+    if not all_raw_tweets:
+        print("⚠️ 未能抓取推文，使用测试数据跳过...", flush=True)
+        all_raw_tweets = [{"screen_name": "livid", "text": "刚刚部署了一个新版本的后端，速度快了三倍。", "favorites": 100, "created_at": "0101", "replies": 5}]
+        
+    all_posts_flat = []
+    for t in all_raw_tweets:
+        likes = t.get("favorites", 0)
+        is_reply = bool(t.get("reply_to"))
+        # 过滤垃圾信息，保留原创或高赞回复
+        if not is_reply or likes >= 5: 
+            all_posts_flat.append({
+                "a": t.get("screen_name", "Unknown"), 
+                "tweet_id": t.get("tweet_id", ""),
+                "l": likes, 
+                "r": t.get("replies", 0),
+                "t": parse_twitter_date(t.get("created_at", "")), 
+                "s": re.sub(r'https?://\S+', '', t.get("text", "")).strip()[:600], 
+                "qt": t.get("quote_text", "")[:200]
+            })
+
+    all_posts_flat.sort(key=lambda x: x["l"], reverse=True)
+    
+    lower_whales = set(a.lower() for a in WHALE_ACCOUNTS)
+    lower_experts = set(a.lower() for a in EXPERT_ACCOUNTS)
+    
+    whale_feed, expert_feed, global_feed = [], [], []
+    account_counts = {}
+    
+    for t in all_posts_flat:
+        if len(t.get("s", "")) <= 20: continue
+        author = t.get("a", "Unknown").lower()
+        if account_counts.get(author, 0) >= 3: continue
+            
+        account_counts[author] = account_counts.get(author, 0) + 1
+        
+        # 分流
+        if author in lower_whales:
+            whale_feed.append(t)
+        elif author in lower_experts:
+            expert_feed.append(t)
+        else:
+            global_feed.append(t)
+
+    # 强制配额：巨鲸15条，专家60条，全网探测外卡25条
+    final_feed = whale_feed[:15] + expert_feed[:60] + global_feed[:25]
+
+    combined_jsonl = "\n".join(json.dumps(obj, ensure_ascii=False) for obj in final_feed)
+    print(f"\n[Data] 组装完成：{len(final_feed)} 条推文 ready for LLM.")
+
+    # 🚨 3. 获取 Perplexity 客观宏观数据
+    macro_info = fetch_macro_with_perplexity()
+
+    if combined_jsonl.strip() or macro_info:
+        xml_result = llm_call_xai(combined_jsonl, today_str, macro_info)
+        if xml_result:
+            print("\n[Parser] Parsing XML to structured data...", flush=True)
+            parsed_data = parse_llm_xml(xml_result)
+            
+            cover_url = ""
+            if parsed_data["cover"]["prompt"]:
+                sf_url = generate_cover_image(parsed_data["cover"]["prompt"])
+                cover_url = upload_to_imgbb_via_url(sf_url) if sf_url else ""
+            
+            render_feishu_card(parsed_data, today_str)
+                
+            if JIJYUN_WEBHOOK_URL:
+                html_content = render_wechat_html(parsed_data, cover_url)
+                # V13.0: 构建推送的网感微信主标题
+                base_title = parsed_data["cover"]["title"] or "今日核心动态"
+                wechat_title = f"{base_title} | 昨晚大佬们在聊啥？"
+                push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
+                
+            save_daily_data(today_str, final_feed, xml_result)
+            update_account_stats(final_feed, parsed_data)
+            
+            print("\n🎉 V13.0 运行完毕！", flush=True)
+        else:
+            print("❌ LLM 处理失败，任务终止。")
+
+if __name__ == "__main__":
+    main()
