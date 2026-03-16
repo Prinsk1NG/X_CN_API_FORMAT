@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v10.3 (出海搞钱专版: TwitterAPI.io重构 + 多源物理隔离 + 极简排版)
-Architecture: TwitterAPI.io -> PPLX/Tavily (Restricted) -> xAI SDK (Isolated Prompt)
+x_api_auto_task_xai_xml.py  v11.0 (超级个体&出海搞钱专版: TwitterAPI.io + Perplexity)
+Architecture: TwitterAPI.io -> PPLX -> xAI SDK -> Clean UI -> Stats Tracker
 """
 
 import os
@@ -28,17 +28,9 @@ SF_API_KEY          = os.getenv("SF_API_KEY", "")
 XAI_API_KEY         = os.getenv("XAI_API_KEY", "")    
 IMGBB_API_KEY       = os.getenv("IMGBB_API_KEY", "") 
 
-PPLX_API_KEY        = os.getenv("PPLX_API_KEY", "")
+# 🚨 核心双引擎密钥
 TWITTERAPI_IO_KEY   = os.getenv("twitterapi_io_KEY", "")
-
-TAVILY_KEYS = []
-for suffix in ["", "_2", "_3", "_4", "_5"]:
-    tk = os.getenv(f"TAVILY_API_KEY{suffix}")
-    if tk and tk.strip(): TAVILY_KEYS.append(tk.strip())
-
-def get_random_tavily_key():
-    if not TAVILY_KEYS: return ""
-    return random.choice(TAVILY_KEYS)
+PPLX_API_KEY        = os.getenv("PPLX_API_KEY", "")
 
 def D(b64_str):
     return base64.b64decode(b64_str).decode("utf-8")
@@ -46,25 +38,54 @@ def D(b64_str):
 URL_SF_IMAGE   = D("aHR0cHM6Ly9hcGkuc2lsaWNvbmZsb3cuY24vdjEvaW1hZ2VzL2dlbmVyYXRpb25z")
 URL_IMGBB      = D("aHR0cHM6Ly9hcGkuaW1nYmIuY29tLzEvdXBsb2Fk")
 
-# ── 巨鲸池 (10人)：流量巨大、容易霸屏的大V与媒体
+# ── 巨鲸池 (15人)：流量巨大、容易霸屏的大V与媒体
 WHALE_ACCOUNTS = [
     "kaifulee", "Fenng", "lidangzzz", "livid", "tualatrix", 
-    "nishuang", "tinyfool", "evilcos", "jiqizhixin", "geekpark"
+    "nishuang", "tinyfool", "evilcos", "jiqizhixin", "geekpark",
+    "sspai_com", "ruanyf", "foxshuo", "pongba", "Svwang1"
 ]
 
-# ── 专家池 (70人)：硬核出海开发者、SaaS创始人、知识博主
-EXPERT_ACCOUNTS = [
-    "dotey", "op7418", "Gorden_Sun", "xiaohu", "shao__meng", "thinkingjimmy", "vista8", "lijigang", "WaytoAGI", "oran_ge", "AlchainHust", "haibun",
-    "SamuelQZQ", "elliotchen100", "berryxia", "lxfater", "turingou", "virushuo", "fankaishuoai", "XDash", "idoubicc", "Cydiar404", "JefferyTatsuya",
-    "CoderJeffLee", "tuturetom", "iamtonyzhu", "Valley101_Qi", "AIMindCo", "AlanChenFun", "AuroraAIDev", "maboroshii", "nicekateyes", "paborobot", "porkybun", "0xDragonMaster", "LittleStar",
-    "luinlee", "seclink", "XiaohuiAI666", "gefei55", "AI_Jasonyu", "JourneymanChina", "dev_afei", "GoSailGlobal", "chuhaiqu", "daluoseo", "realNyarime", "DigitalNomadLC",
-    "RocM301", "shuziyimin", "itangtalk", "guishou_56", "9yearfish", "OwenYoungZh", "waylybaye", "randyloop", "shengxj1", "FinanceYF5", "fkysly", "zhixianio",
-    "hongming731", "penny777", "wshuy", "Web3Yolanda", "maboroshi", "CryptoMasterAI", "AIProductDaily", "aigclink", "founder_park", "pingwest"
-]
+# ── 专家池 (90+人)：硬核出海开发者、SaaS创始人、AI Builder、副业搞钱博主
+EXPERT_ACCOUNTS = list(set([
+    # AI 领域
+    "dotey", "op7418", "Gorden_Sun", "xiaohu", "shao__meng", "thinkingjimmy", "goocarlos", 
+    "Tumeng05", "AxtonLiu", "haibun", "vista8", "lijigang", "WaytoAGI", "xicilion", 
+    "oran_ge", "AlchainHust", "SamuelQZQ", "elliotchen100", "Hayami_kiraa", "berryxia",
+    "MANISH1027512", "joshesye", "zstmfhy", "bozhou_ai", "CuiMao", "RookieRicardoR", "wlzh",
+    
+    # 创业者领域
+    "lxfater", "nateleex", "yan5xu", "santiagoyoungus", "Cydiar404", "JefferyTatsuya", 
+    "seclink", "turingou", "virushuo", "fankaishuoai", "XDash", "idoubicc", "CoderJeffLee", 
+    "tuturetom", "iamtonyzhu", "hongjun60", "Valley101_Qian", "binghe", "yyyole", "0xkakarot888", "rionaifantasy", "Wujizhuzhu",
+    
+    # SaaS / APP 产品领域
+    "indie_maker_fox", "HongyuanCao", "nextify2024", "readyfor2025", "weijunext", "yihui_indie", 
+    "JinsFavorites", "xiongchun007", "Junyu", "luoleiorg", "Plidezus", "jesselaunz", "lewangx", 
+    "luinlee", "yupi996", "servasyy_ai", "XiaohuiAI666", "dingyi", "yanhua1010",
+    
+    # 出海与流量领域
+    "gefei55", "lyc_zh", "AI_Jasonyu", "JourneymanChina", "dev_afei", "luobogooooo", 
+    "GoSailGlobal", "chuhaiqu", "daluoseo", "hezhiyan7", "imaxichuhai", "canghe", "Nicole_yang88",
+    
+    # 独立开发者领域
+    "austinit", "guishou_56", "9yearfish", "benshandebiao", "hwwaanng", "OwenYoungZh", 
+    "waylybaye", "randyloop", "shengxj1", "FinanceYF5", "liuyi0922", "fkysly", "zhixianio", "Pluvio9yte",
+    "tangjinzhou", "IndieDevHailey", "nopinduoduo",
+    
+    # OpenClaw 与 Agent
+    "abskoop", "stark_nico99", "hongming731", "penny777", "quarktalksss", "Khazix0918", "steipete", "AI_jacksaku",
+    
+    # 知识分享领域
+    "kasong2048", "cellinlab", "wshuyi", "Francis_YAO_", "realNyarime", "DigitalNomadLC", 
+    "RocM301", "EvaCmore", "shuziyimin", "itangtalk", "knowledgefxg", "cj3214567667", "MindfulReturn", "Tz_2022", "EvanWritesX", "yaohui12138",
+    
+    # 副业领域
+    "Astronaut_1216", "ityouknows", "expatlevi", "ll777547099", "PandaTalk8", "catmangox", "indiehackercase"
+]))
 
 if TEST_MODE:
     WHALE_ACCOUNTS = WHALE_ACCOUNTS[:2]
-    EXPERT_ACCOUNTS = EXPERT_ACCOUNTS[:8]
+    EXPERT_ACCOUNTS = EXPERT_ACCOUNTS[:5]
 
 def get_feishu_webhooks() -> list:
     urls = []
@@ -73,20 +94,20 @@ def get_feishu_webhooks() -> list:
         if url: urls.append(url)
     return urls
 
-def get_safe_yesterday() -> str:
-    """获取安全的现实世界基准时间，防止环境时空错乱"""
-    try:
-        time_resp = requests.get("http://worldtimeapi.org/api/timezone/Asia/Shanghai", timeout=5).json()
-        real_today = datetime.fromisoformat(time_resp["datetime"])
-        return (real_today - timedelta(days=2)).strftime("%Y-%m-%d") # 放宽到2天内，保证有数据
-    except:
-        return (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
-
 def get_dates() -> tuple:
     tz = timezone(timedelta(hours=8))
     today = datetime.now(tz)
     yesterday = today - timedelta(days=1)
     return today.strftime("%Y-%m-%d"), yesterday.strftime("%Y-%m-%d")
+
+def get_safe_yesterday() -> str:
+    """获取安全的现实世界基准时间"""
+    try:
+        time_resp = requests.get("http://worldtimeapi.org/api/timezone/Asia/Shanghai", timeout=5).json()
+        real_today = datetime.fromisoformat(time_resp["datetime"])
+        return (real_today - timedelta(days=2)).strftime("%Y-%m-%d")
+    except:
+        return (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
 
 def parse_twitter_date(date_str):
     try:
@@ -113,17 +134,17 @@ def safe_int(val):
         return 0
 
 # ==============================================================================
-# 🚀 外部情报检索：思路3落实 (收缩搜索域，成为客观查数机器人)
+# 🚀 外部情报检索：Perplexity (出海与搞钱专属)
 # ==============================================================================
 def fetch_macro_with_perplexity() -> str:
+    """被强行降级为客观查数机器人，防止干扰推特一手核心叙事"""
     if not PPLX_API_KEY: return ""
-    print("\n🕵️ [宏观新闻官] 呼叫 Perplexity 获取硬核数据...", flush=True)
+    print("\n🕵️ [宏观新闻官] 呼叫 Perplexity 获取出海搞钱硬核数据...", flush=True)
     try:
-        # 🚨 针对出海赛道特殊优化的 Prompt
         prompt = """你是顶级出海、独立开发与SaaS行业分析师。请仅检索过去 24 小时内该圈子的【硬核客观数据】。
-        🚨 最高指令：不要宽泛的行业趋势与专家观点，只抓取以下两类具体事实，必须带具体媒体或官方来源：
-        1. 💰 具体的SaaS产品被收购案、高额融资、或者真实被验证的 MRR 收入破万数据。
-        2. 🎁 GitHub 上刚刚发布或突然爆火的出海开源项目、效率工具、新插件（带具体名字和功能）。
+        🚨 最高指令：不要宽泛的行业趋势与专家观点，只抓取以下两类具体事实，必须带具体媒体来源：
+        1. 💰 具体的SaaS产品高额融资、被验证的 MRR 收入破万数据、或海外独立开发者晒出的真实收入。
+        2. 🎁 GitHub 上刚刚发布或突然爆火的 AI 开源项目、效率工具（带具体名字和功能）。
         绝对禁止将 "Perplexity" 作为信息来源。"""
         
         headers = {"Authorization": f"Bearer {PPLX_API_KEY}", "Content-Type": "application/json"}
@@ -136,53 +157,8 @@ def fetch_macro_with_perplexity() -> str:
     except Exception as e: print(f"  ❌ Perplexity 抛出异常: {e}", flush=True)
     return ""
 
-def fetch_leaders_with_tavily(accounts: list) -> str:
-    if not TAVILY_KEYS: return ""
-    track_list = accounts[:45]
-    print(f"\n🐦 [领袖盯盘员] 扫描 {len(track_list)} 位核心大佬的站外动态...", flush=True)
-    chunk_size = 15
-    leader_chunks = [",".join(track_list[i:i + chunk_size]) for i in range(0, len(track_list), chunk_size)]
-    url = "https://api.tavily.com/search"
-    headers = {"Content-Type": "application/json"}
-    aggregated_context = ""
-
-    for i, chunk in enumerate(leader_chunks, 1):
-        current_tk = get_random_tavily_key()
-        try:
-            payload = {"api_key": current_tk, "query": f"Today's SaaS, indie hacker, global market news from: {chunk}", "search_depth": "advanced", "topic": "news", "days": 1, "include_answer": True}
-            response = requests.post(url, json=payload, headers=headers, timeout=45)
-            if response.status_code == 200:
-                data = response.json()
-                aggregated_context += f"\n\n### [第 {i} 组大佬外部情报]\n" + data.get("answer", "")
-                for result in data.get("results", [])[:3]:
-                    aggregated_context += f"\n- [{result['title']}]({result['url']}): {result['content']}"
-        except: pass
-        time.sleep(1.5) 
-    print(f"  ✅ Tavily 领袖矩阵检索完毕。", flush=True)
-    return aggregated_context
-
-def fetch_global_news_with_tavily() -> str:
-    if not TAVILY_KEYS: return ""
-    print(f"\n🌍 [全网雷达] 扫描全球出海搞钱硬核项目...", flush=True)
-    current_tk = get_random_tavily_key()
-    url = "https://api.tavily.com/search"
-    headers = {"Content-Type": "application/json"}
-    # 🚨 针对出海赛道特殊优化的 Tavily 搜索词
-    payload = {"api_key": current_tk, "query": "Indie hacker revenue, SaaS MRR milestones, solo founder product launches, and global software market trends in the last 24 hours", "search_depth": "advanced", "topic": "news", "days": 1, "include_answer": True}
-    aggregated_context = ""
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=45)
-        if response.status_code == 200:
-            data = response.json()
-            aggregated_context += f"### [Tavily 全网客观数据]\n" + data.get("answer", "")
-            for result in data.get("results", [])[:5]:
-                aggregated_context += f"\n- [{result['title']}]({result['url']}): {result['content']}"
-            print("  ✅ Tavily 全网客观热点扫描完毕。", flush=True)
-    except: pass
-    return aggregated_context
-
 # ==============================================================================
-# 🚀 第一阶段：TwitterAPI.io 强大且纯净的原生抓取
+# 🚀 第一阶段：TwitterAPI.io 降维反风控抓取引擎
 # ==============================================================================
 def parse_tweets_recursive(data) -> list:
     all_tweets = []
@@ -233,20 +209,21 @@ def parse_tweets_recursive(data) -> list:
     return unique
 
 def fetch_tweets_twitterapi_io(accounts: list, label: str) -> list:
-    if not TWITTERAPI_IO_KEY: return []
+    if not TWITTERAPI_IO_KEY: 
+        print(f"⚠️ 未配置 twitterapi_io_KEY，跳过{label}抓取", flush=True)
+        return []
+    
     yesterday = get_safe_yesterday()
     all_tweets = []
-    
     print(f"\n⏳ [{label}扫盘] 启动 TwitterAPI.io 点对点扫描，共 {len(accounts)} 人...", flush=True)
-    
     headers = {"X-API-Key": TWITTERAPI_IO_KEY}
     url = "https://api.twitterapi.io/twitter/tweet/advanced_search"
     
-    # 将名单分块查询，避免查询语句过长，同时节省额度
     chunk_size = 5
     chunks = [accounts[i:i + chunk_size] for i in range(0, len(accounts), chunk_size)]
     
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks, 1):
+        print(f"  🔎 挖掘第 {i}/{len(chunks)} 批动态...", flush=True)
         query_str = " OR ".join([f"from:{acc}" for acc in chunk])
         query = f"({query_str}) since:{yesterday} -filter:retweets"
         params = {"query": query, "queryType": "Latest"}
@@ -258,7 +235,10 @@ def fetch_tweets_twitterapi_io(accounts: list, label: str) -> list:
                 for t in tweets: t["t"] = parse_twitter_date(t.get("created_at", ""))
                 all_tweets.extend(tweets)
                 print(f"    ✅ 成功提取 {len(tweets)} 条。")
-        except Exception: pass
+            else:
+                print(f"    ⚠️ HTTP {resp.status_code}")
+        except Exception as e:
+            pass
         time.sleep(1) 
         
     return all_tweets
@@ -286,14 +266,13 @@ def fetch_mentions_twitterapi(accounts: list) -> list:
     return all_tweets
 
 def fetch_global_hot_tweets_twitterapi() -> list:
-    """全网探测引擎，针对出海与独立开发热点"""
     if not TWITTERAPI_IO_KEY: return []
     yesterday = get_safe_yesterday()
     all_tweets = []
     
     print(f"\n📡 [全网探测] 扫描出海搞钱圈突发热点...", flush=True)
     queries = [
-        f'(出海 OR 独立开发 OR indiehacker OR MRR OR SaaS OR 搞钱) since:{yesterday} min_faves:10 -filter:retweets'
+        f'(出海 OR 独立开发 OR indiehacker OR MRR OR SaaS OR 副业搞钱) since:{yesterday} min_faves:10 -filter:retweets'
     ]
     
     headers = {"X-API-Key": TWITTERAPI_IO_KEY}
@@ -313,30 +292,32 @@ def fetch_global_hot_tweets_twitterapi() -> list:
         
     return all_tweets
 
+
 # ==============================================================================
-# 🚀 第二阶段：多源融合 xAI XML 提示词与大模型调用 (物理职权隔离 + 爆款标题)
+# 🚀 第二阶段：纯 XML 提示词与大模型调用 (物理职权隔离 + 专家级 COMMENTS)
 # ==============================================================================
-def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str, tavily_info: str) -> str:
+def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     return f"""
-你是一位顶级的中文互联网科技/出海领域投资分析师及新媒体主编。
+你是一位顶级的中文互联网科技/出海独立开发领域的商业分析师及新媒体主编。
 请结合提供的【多源情报】，提炼出有创业和出海实操价值的洞察，用犀利、专业的中文进行总结。
 
 【情报等级与职权隔离铁律】（🚨极其重要）：
 1. X平台一手推文（JSONL）是【绝对的主干】。你必须且只能使用推文数据来生成 <THEMES>（深度叙事追踪）和 <TOP_PICKS>（精选推文）。
-2. Perplexity 和 Tavily 提供的情报仅作为【客观背景补充】。你只能使用它们来填充 <MONEY_RADAR>（搞钱雷达）和 <RISK_AND_TRENDS>（风险与趋势）。绝对不允许让外部媒体的二手观点冲淡 X 平台上一手大佬干货！
+2. Perplexity 提供的情报仅作为【客观数据补充】。你只能用它来填充 <MONEY_RADAR> 和 <RISK_AND_TRENDS> 中的客观数字事实。绝对不允许让外部二手机构的观点冲淡 X 平台上一手大佬的硬核实战经验！
 
 【输出结构规范】
 <REPORT>
-  <!-- 🚨 注意：必须挑选当日1个最具代表性、最能代表出海搞钱趋势的核心事件，写成10-20字的微信公众号爆款标题，绝对不要罗列多个事件！ -->
-  <COVER title="10-20字极具吸引力的出海搞钱单主题爆款标题" prompt="100字英文图生图提示词（动态选择最佳画风，如Digital Nomad, Minimalist等）" insight="30字内核心洞察，中文"/>
-  <PULSE>用一句话总结今日最核心的 1-2 个出海/搞钱动态信号。</PULSE>
+  <!-- 🚨 必须挑选当日1个最具代表性的核心事件，写成10-20字的极具吸引力的公众号爆款标题，绝对不要罗列多个事件！ -->
+  <COVER title="10-20字极具吸引力的出海/搞钱单主题爆款标题" prompt="100字英文图生图提示词（赛博朋克/数字游民画风）" insight="30字内核心洞察，中文"/>
+  <PULSE>用一句话总结今日最核心的 1-2 个出海/搞钱/AI动态信号。</PULSE>
   
   <THEMES>
     <THEME type="new" emoji="💰">
-      <TITLE>主题标题：副标题 (请挖掘独立话题，不要过度合并)</TITLE>
+      <TITLE>主题标题：副标题 (请挖掘具体的话题，不要过度合并)</TITLE>
       <NARRATIVE>一句话核心判断，说清楚“什么在变化、为什么重要”</NARRATIVE>
-      <TWEET account="X账号名" role="中文身份标签">【严禁纯英文】以中文为主翻译原文或资讯的核心观点</TWEET>
+      <TWEET account="X账号名" role="中文身份标签">【严禁纯英文】以中文为主精练大佬的实战言论</TWEET>
       <TWEET account="..." role="...">...</TWEET>
+      <COMMENTS>🔥 你的专家犀利点评：深度剖析背后的商业逻辑，指出普通开发者的跟进方向</COMMENTS>
       <OUTLOOK>对该现象的深度解读与未来变现展望</OUTLOOK>
       <OPPORTUNITY>具体的出海实操机会、变现路径或搞钱思路</OPPORTUNITY>
       <RISK>踩坑预警：可能面临的失败教训、封号、合规等风险</RISK>
@@ -344,7 +325,7 @@ def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str, tavi
   </THEMES>
 
   <MONEY_RADAR>
-    <!-- 从 Perplexity/Tavily 提取硬核事实 -->
+    <!-- 主要依靠 Perplexity 补充的数据 -->
     <ITEM category="变现快讯">具体的MRR增长、收入数据、被验证的商业模式等。</ITEM>
     <ITEM category="出海渠道">海外市场洞察、流量获取打法、增长黑客手段。</ITEM>
     <ITEM category="工具推荐">被提及或推荐的 AI 工具、SaaS、效率神器。</ITEM>
@@ -366,22 +347,19 @@ def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str, tavi
 # 外部客观数据背景 (Perplexity):
 {macro_info if macro_info else "未获取到宏观数据"}
 
-# 外部客观数据背景 (Tavily):
-{tavily_info if tavily_info else "未获取到补充数据"}
-
 # X平台一手原始数据输入 (绝对主干 JSONL):
 {combined_jsonl}
 
 # 日期: {today_str}
 """
 
-def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str, tavily_info: str) -> str:
+def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     api_key = XAI_API_KEY.strip()
     if not api_key: return ""
 
     max_data_chars = 100000 
     data = combined_jsonl[:max_data_chars] if len(combined_jsonl) > max_data_chars else combined_jsonl
-    prompt = _build_xml_prompt(data, today_str, macro_info, tavily_info)
+    prompt = _build_xml_prompt(data, today_str, macro_info)
     model_name = "grok-4.20-beta-latest-non-reasoning" 
 
     print(f"\n[LLM/xAI] Requesting {model_name} via Official xai-sdk...", flush=True)
@@ -436,6 +414,9 @@ def parse_llm_xml(xml_text: str) -> dict:
             for t_match in re.finditer(r'<TWEET\s+account="(.*?)"\s+role="(.*?)">(.*?)</TWEET>', theme_body, re.IGNORECASE | re.DOTALL):
                 tweets.append({"account": t_match.group(1).strip(), "role": t_match.group(2).strip(), "content": t_match.group(3).strip()})
         
+        comments_match = re.search(r'<COMMENTS>(.*?)</COMMENTS>', theme_body, re.IGNORECASE | re.DOTALL)
+        comments = comments_match.group(1).strip() if comments_match else ""
+
         out_match = re.search(r'<OUTLOOK>(.*?)</OUTLOOK>', theme_body, re.IGNORECASE | re.DOTALL)
         outlook = out_match.group(1).strip() if out_match else ""
         opp_match = re.search(r'<OPPORTUNITY>(.*?)</OPPORTUNITY>', theme_body, re.IGNORECASE | re.DOTALL)
@@ -445,7 +426,7 @@ def parse_llm_xml(xml_text: str) -> dict:
         
         data["themes"].append({
             "type": "new", "emoji": emoji, "title": theme_title, "narrative": narrative, "tweets": tweets,
-            "outlook": outlook, "opportunity": opportunity, "risk": risk
+            "comments": comments, "outlook": outlook, "opportunity": opportunity, "risk": risk
         })
         
     def extract_items(tag_name, target_list):
@@ -488,6 +469,7 @@ def render_feishu_card(parsed_data: dict, today_str: str):
             for t in theme["tweets"]:
                 theme_md += f"🗣️ **@{t['account']} | {t['role']}**\n<font color='grey'>“{t['content']}”</font>\n"
             
+            if theme.get("comments"): theme_md += f"<font color='red'>**🔥 专家点评：**</font> {theme['comments']}\n"
             if theme.get("outlook"): theme_md += f"<font color='blue'>**🔭 深度展望：**</font> {theme['outlook']}\n"
             if theme.get("opportunity"): theme_md += f"<font color='green'>**🎯 潜在机会：**</font> {theme['opportunity']}\n"
             if theme.get("risk"): theme_md += f"<font color='red'>**⚠️ 踩坑预警：**</font> {theme['risk']}\n"
@@ -517,26 +499,21 @@ def render_feishu_card(parsed_data: dict, today_str: str):
         "msg_type": "interactive",
         "card": {
             "config": {"wide_screen_mode": True, "enable_forward": True},
-            "header": {"title": {"content": f"出海搞钱的中国人都在聊啥 | {today_str}", "tag": "plain_text"}, "template": "orange"},
-            "elements": elements + [{"tag": "note", "elements": [{"tag": "plain_text", "content": "Powered by TwitterAPI.io + xai-sdk"}]}]
+            "header": {"title": {"content": f"出海搞钱圈昨晚在聊啥 | {today_str}", "tag": "plain_text"}, "template": "orange"},
+            "elements": elements + [{"tag": "note", "elements": [{"tag": "plain_text", "content": "Powered by TwitterAPI.io + Perplexity + xAI"}]}]
         }
     }
 
     for url in webhooks:
         try:
             requests.post(url, json=card_payload, timeout=20)
-            print(f"[Push/Feishu] OK Card sent to {url.split('/')[-1][:8]}...", flush=True)
-        except Exception as e:
-            print(f"[Push/Feishu] ERROR: {e}", flush=True)
+            print(f"[Push/Feishu] OK Card sent...", flush=True)
+        except Exception as e: print(f"[Push/Feishu] ERROR: {e}", flush=True)
 
-# 🚨 微信极致精简排版：带有出海特色的橙色暖色调 🚨
 def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
     html_lines = []
+    if cover_url: html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
     
-    if cover_url: 
-        html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
-    
-    # 🚨 Insight 标头极简化
     if parsed_data["cover"].get("insight"):
         header_text = "💡 Insight"
         html_lines.append(f'<div style="border-radius:8px;background:#FFF7E6;padding:12px 14px;margin:0 0 20px 0;color:#d97706;"><div style="font-weight:bold;margin-bottom:6px;">{header_text}</div><div>{parsed_data["cover"]["insight"]}</div></div>')
@@ -550,7 +527,6 @@ def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
     if parsed_data["themes"]:
         html_lines.append(make_h3("🧠 深度叙事追踪"))
         for idx, theme in enumerate(parsed_data["themes"]):
-            # 🚨 增加视觉隔断
             if idx > 0:
                 html_lines.append('<hr style="border:none;border-top:1px solid #cbd5e1;margin:32px 0 24px 0;"/>')
 
@@ -561,6 +537,8 @@ def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
                 html_lines.append(f'<p style="margin:8px 0 2px 0;font-size:14px;font-weight:bold;color:#2c3e50;">🗣️ @{t["account"]} <span style="color:#94a3b8;font-weight:normal;">| {t["role"]}</span></p>')
                 html_lines.append(make_quote(f'"{t["content"]}"'))
             
+            # 🚨 渲染新增的专家点评机制
+            if theme.get("comments"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#b91c1c;">🔥 专家点评：</strong>{theme["comments"]}</p>')
             if theme.get("outlook"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#eef2ff; padding: 8px 12px; border-radius: 4px;"><strong style="color:#4f46e5;">🔭 深度展望：</strong>{theme["outlook"]}</p>')
             if theme.get("opportunity"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#f0fdf4; padding: 8px 12px; border-radius: 4px;"><strong style="color:#16a34a;">🎯 潜在机会：</strong>{theme["opportunity"]}</p>')
             if theme.get("risk"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#dc2626;">⚠️ 踩坑预警：</strong>{theme["risk"]}</p>')
@@ -582,7 +560,9 @@ def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
 
     return "".join(html_lines)
 
-
+# ==============================================================================
+# 附加工具 (生图、图床与推送)
+# ==============================================================================
 def generate_cover_image(prompt):
     if not SF_API_KEY or not prompt: return ""
     try:
@@ -606,11 +586,9 @@ def push_to_jijyun(html_content, title, cover_url=""):
     try: 
         requests.post(JIJYUN_WEBHOOK_URL, json={"title": title, "author": "Prinski", "html_content": html_content, "cover_jpg": cover_url}, timeout=30)
         print(f"[Push/WeChat] OK Sent to Jijyun", flush=True)
-    except Exception as e: 
-        print(f"  ⚠️ 推送机语警告: {e}", flush=True)
+    except Exception as e: print(f"  ⚠️ 推送机语警告: {e}", flush=True)
 
 def save_daily_data(today_str: str, post_objects: list, report_text: str):
-    """保存每日的流水数据与完整报告，用于数据备份与回溯"""
     data_dir = Path(f"data/{today_str}")
     data_dir.mkdir(parents=True, exist_ok=True)
     combined_txt = "\n".join(json.dumps(obj, ensure_ascii=False) for obj in post_objects)
@@ -651,7 +629,7 @@ def update_account_stats(final_feed: list, parsed_data: dict):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"出海搞钱的中国人都在聊啥 v10.3 (出海专版重构 - {mode_str})", flush=True)
+    print(f"出海搞钱圈昨晚在聊啥 v11.0 (TwitterAPI.io + Perplexity - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     
     if not TWITTERAPI_IO_KEY:
@@ -661,14 +639,14 @@ def main():
     today_str, _ = get_dates()
     all_raw_tweets = []
     
-    # 🚨 1. 抓取巨鲸池与专家池 (使用 TwitterAPI.io Advanced Search)
+    # 🚨 第 1 步：巨鲸池与专家池 (使用 TwitterAPI.io Advanced Search)
     all_raw_tweets.extend(fetch_tweets_twitterapi_io(WHALE_ACCOUNTS, label="巨鲸"))
     all_raw_tweets.extend(fetch_tweets_twitterapi_io(EXPERT_ACCOUNTS, label="专家"))
     
-    # 🚨 2. 抓取外部互动 (Mentions) - 看看出海圈大V被谁圈了
+    # 🚨 第 2 步：抓取外部互动 (Mentions) - 看看出海圈大V被谁圈了
     all_raw_tweets.extend(fetch_mentions_twitterapi(WHALE_ACCOUNTS))
     
-    # 🚨 3. 抓取全网突发热点
+    # 🚨 第 3 步：全网独立开发/搞钱热点扫描
     all_raw_tweets.extend(fetch_global_hot_tweets_twitterapi())
     
     if not all_raw_tweets:
@@ -715,14 +693,13 @@ def main():
 
     combined_jsonl = "\n".join(json.dumps(obj, ensure_ascii=False) for obj in final_feed)
 
-    # 🚨 4. 融合 Perplexity 宏观情报与 Tavily 外部动态 (被限制为纯出海客观数据补充)
+    # 🚨 第 4 步：获取 Perplexity 客观宏观数据
     macro_info = fetch_macro_with_perplexity()
-    tavily_info = fetch_global_news_with_tavily()
 
-    print(f"\n[Data] 三路源汇聚完毕，准备移交 xAI 进行超级排版...")
+    print(f"\n[Data] 组装完成：{len(final_feed)} 条推文 ready for LLM.")
 
-    if combined_jsonl.strip() or macro_info or tavily_info:
-        xml_result = llm_call_xai(combined_jsonl, today_str, macro_info, tavily_info)
+    if combined_jsonl.strip() or macro_info:
+        xml_result = llm_call_xai(combined_jsonl, today_str, macro_info)
         if xml_result:
             print("\n[Parser] Parsing XML to structured data...", flush=True)
             parsed_data = parse_llm_xml(xml_result)
@@ -736,16 +713,16 @@ def main():
                 
             if JIJYUN_WEBHOOK_URL:
                 html_content = render_wechat_html(parsed_data, cover_url)
-                # 🚨 V10.3: 构建推送的出海圈复合微信主标题
+                # 🚨 V11.0: 构建推送的复合微信主标题
                 base_title = parsed_data["cover"]["title"] or "今日独立开发与出海核心动态"
                 wechat_title = f"{base_title} | 昨晚出海圈在聊啥？"
                 push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
                 
-            # 🚨 5. 每日存档与账号数据库更新
+            # 🚨 第 5 步：每日存档与账号优胜劣汰数据库更新
             save_daily_data(today_str, final_feed, xml_result)
             update_account_stats(final_feed, parsed_data)
             
-            print("\n🎉 V10.3 运行完毕！", flush=True)
+            print("\n🎉 V11.0 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
