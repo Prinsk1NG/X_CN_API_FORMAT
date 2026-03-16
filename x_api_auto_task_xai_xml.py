@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v13.0 (多智能体聚类版: 全网中文热点 + Grok-4.20-Multi-Agent)
-Architecture: TwitterAPI.io -> PPLX -> xAI SDK -> Clean UI -> Stats Tracker
+x_api_auto_task_xai_xml.py  v13.1 (出海搞钱锦囊 & 精准吃瓜版)
+Architecture: TwitterAPI.io -> PPLX -> xAI SDK (Grok-4.20-Multi-Agent) -> Clean UI
 """
 
 import os
@@ -101,7 +101,6 @@ def get_dates() -> tuple:
     return today.strftime("%Y-%m-%d"), yesterday.strftime("%Y-%m-%d")
 
 def get_safe_yesterday() -> str:
-    """获取安全的现实世界基准时间"""
     try:
         time_resp = requests.get("http://worldtimeapi.org/api/timezone/Asia/Shanghai", timeout=5).json()
         real_today = datetime.fromisoformat(time_resp["datetime"])
@@ -137,7 +136,6 @@ def safe_int(val):
 # 🚀 外部情报检索：Perplexity (客观查数机器人)
 # ==============================================================================
 def fetch_macro_with_perplexity() -> str:
-    """不再限定出海，扩大为科技圈全领域的客观事实补充"""
     if not PPLX_API_KEY: return ""
     print("\n🕵️ [宏观新闻官] 呼叫 Perplexity 获取全网硬核数据...", flush=True)
     try:
@@ -244,15 +242,12 @@ def fetch_tweets_twitterapi_io(accounts: list, label: str) -> list:
     return all_tweets
 
 def fetch_global_hot_tweets_twitterapi() -> list:
-    """🚨 V13.0: 彻底放开领域限制，专门捕获 X 平台全网高赞的【中文推文】补充信息差"""
     if not TWITTERAPI_IO_KEY: return []
     yesterday = get_safe_yesterday()
     all_tweets = []
     
     print(f"\n📡 [全网探测] 扫描全球 X.com 高赞中文神仙打架与突发热点...", flush=True)
     
-    # 策略 1: 扫描过去 24 小时全网任何点赞大于 300 的纯中文推文
-    # 策略 2: 适当降低门槛 (赞>100)，聚焦在包含泛商业词汇的中文帖
     queries = [
         f'lang:zh since:{yesterday} min_faves:300 -filter:retweets',
         f'(AI OR 科技 OR 创业 OR 商业 OR 搞钱 OR 独立开发 OR 马斯克 OR 开源) lang:zh since:{yesterday} min_faves:100 -filter:retweets'
@@ -275,65 +270,64 @@ def fetch_global_hot_tweets_twitterapi() -> list:
         
     return all_tweets
 
-
 # ==============================================================================
-# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20-Multi-Agent 聚类版)
+# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20-Multi-Agent 出海吃瓜版)
 # ==============================================================================
 def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     return f"""
-你是一个专业的 X（Twitter）话题分析师和主编。
-目前你搭载了强大的 Multi-Agent 聚类分析能力。请基于下面过去 24 小时的账号更新（包括我们指定的 100 多位中文超级个体，以及全网热门的高赞中文推文），自动进行主题聚类。
+你是一个专业的 X（Twitter）话题分析师和出海搞钱圈主编。
+目前你搭载了强大的 Multi-Agent 聚类分析能力。请基于下面过去 24 小时的账号更新，自动进行主题聚类。
 
 【核心指令】
-1. 不必局限于特定领域。只要是过去 24 小时内最值得关注、最有趣、最硬核或最有启发的话题（技术突破、大佬商业思考、大瓜、趋势等），都请提炼出来。
-2. 从所有数据中，精心挑选出 3~5 个最有趣、最有讨论价值的话题作为 <THEMES>。
-3. 🚨【翻译与评价铁律】：在 <COMMENTS> 中，请给出你的专家级点评（解释它为什么有趣、背后的数据/趋势支撑是什么、或对普通人有什么启示）。
-
-【职权隔离铁律】
-1. X平台一手推文（JSONL）是【绝对的主干】，用于生成 <THEMES> 和 <TOP_PICKS>。
-2. Perplexity 提供的情报仅用于填充 <MARKET_RADAR> 中的客观数字事实，绝不能用二手媒体报道冲淡推特大佬的干货！
+1. 挑选出 3~5 个最有趣、最硬核或最有讨论价值的话题作为 <THEMES>。
+2. 🚨【吃瓜姿势】：在 <GOSSIP> 中给出你的专家级简短点评，必须限制在 30 字以内！
+3. 🚨【四选二视角】：对于每个深度追踪的话题，你必须根据内容的真实情况，在“潜在机会、踩坑预警、核心共识、重大分歧”这四个视角中，【任选 1 到 2 个】最契合的角度来写。如果没有突出的观点，千万不要硬编，直接省略该标签。
+4. 🚨【拒绝宽泛】：在生成 <MARKET_RADAR> 时，如果说到赛道（比如机器人），不要宽泛地说“获得国家队支持”，必须明确指出具体是哪个细分赛道（如人形机器人、服务型机器人）或哪几家具体公司。让人一目了然。
 
 【输出结构规范】(必须且只能输出严格的 XML，绝对不要使用反引号来包裹代码块！)
 <REPORT>
-  <COVER title="10-20字极具吸引力的单主题爆款标题" prompt="100字英文图生图提示词" insight="30字内核心洞察，中文"/>
-  <PULSE>用一句话总结今日最核心的 1-2 个全网科技/商业动态信号。</PULSE>
+  <COVER title="10-20字极具吸引力的公众号网感爆款标题" prompt="100字英文图生图提示词" insight="30字内核心洞察，中文"/>
+  <PULSE>用一句话总结今日最核心的 1-2 个全网科技/出海商业动态信号。</PULSE>
   
   <THEMES>
     <THEME type="new" emoji="🔥">
       <TITLE>话题名称：简短描述</TITLE>
       <NARRATIVE>一句话说明：到底发生了什么、什么在变化</NARRATIVE>
-      <TWEET account="X账号名" role="中文身份标签">【严禁纯英文】以中文为主精练该话题下大佬的实战言论或爆料</TWEET>
+      <TWEET account="X账号名" role="中文身份标签">【严禁纯英文】以中文为主精练大佬的实战言论或爆料</TWEET>
       <TWEET account="..." role="...">...</TWEET>
-      <COMMENTS>🔥 为什么有趣：深度剖析背后的逻辑、趋势支撑、或它带来的独特启示</COMMENTS>
-      <OPPORTUNITY>可能带来的机会或红利</OPPORTUNITY>
-      <RISK>争议点、风险或踩坑预警</RISK>
+      
+      <GOSSIP>🍉吃瓜姿势：专家点评，必须严格限制在30字以内！</GOSSIP>
+      
+      <!-- 🚨 必须从以下 4 个角度中，任选 1 到 2 个最契合的进行输出。没有突出的就不写，直接省略该标签！ -->
+      <OPPORTUNITY>潜在机会：具体的红利、赛道方向或搞钱思路</OPPORTUNITY>
+      <RISK>踩坑预警：可能面临的失败教训、封号、合规等风险</RISK>
+      <CONSENSUS>核心共识：大家一致认同的核心判断</CONSENSUS>
+      <DIVERGENCE>重大分歧：争议点或未解之谜</DIVERGENCE>
     </THEME>
   </THEMES>
 
   <MARKET_RADAR>
-    <!-- 从 Perplexity 提取硬核事实 -->
-    <ITEM category="硬核快讯">重磅融资、收入数据、财报等客观事实。</ITEM>
-    <ITEM category="行业风向">巨头动作、市场大盘风向。</ITEM>
-    <ITEM category="工具/项目">被提及或推荐的新开源项目、AI 工具。</ITEM>
+    <!-- 🚨 必须极度具体！必须指明具体公司、具体细分赛道，或写出具体数据！ -->
+    <ITEM category="硬核快讯">重磅融资、财报等客观事实，必须有明确的主体和数字。</ITEM>
+    <ITEM category="行业风向">巨头具体动作、明确的细分市场洞察。</ITEM>
   </MARKET_RADAR>
 
-  <RISK_AND_TRENDS>
-    <ITEM category="踩坑预警">平台政策变化、被封禁的风险、开发或创业大坑。</ITEM>
-    <ITEM category="趋势判断">未来 1-3 个月的赛道趋势判断。</ITEM>
-  </RISK_AND_TRENDS>
+  <MONEY_TIPS>
+    <!-- 🚨 必填固定板块：搞钱锦囊 -->
+    <ITEM category="搞副业经验">提取大佬分享的副业思路、变现过程或经验。</ITEM>
+    <ITEM category="出海实操">海外银行卡、电话卡、网络收费避坑等出海运营经验。</ITEM>
+    <ITEM category="实用小工具">被推荐的效率神器、新开源项目或好用的出海工具。</ITEM>
+  </MONEY_TIPS>
 
   <TOP_PICKS>
-    <!-- 🚨 必须挑选出 3 到 5 条全网最精彩的精选推文！严禁只输出一条！ -->
     <TWEET account="..." role="...">【严禁纯英文】价值最大、最有趣或点赞极高的原味金句（中文精译）</TWEET>
-    <TWEET account="..." role="...">...</TWEET>
-    <TWEET account="..." role="...">...</TWEET>
   </TOP_PICKS>
 </REPORT>
 
 # 外部客观数据背景 (Perplexity):
 {macro_info if macro_info else "未获取到宏观数据"}
 
-# X平台一手原始数据输入 (包含指定账号与全网高赞盲区 JSONL):
+# X平台一手原始数据输入 (绝对主干 JSONL):
 {combined_jsonl}
 
 # 日期: {today_str}
@@ -360,7 +354,7 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
             chat.append(user(prompt))
             result = chat.sample().content.strip()
             
-            # 🚨 核心修复：使用安全的量词语法匹配三个反引号，避免引发 Markdown 截断和语法错误！
+            # 使用安全的量词语法匹配三个反引号，避免引发 Markdown 截断和语法错误
             result = re.sub(r'^`{3}(?:xml|jsonl|json)?\n', '', result, flags=re.MULTILINE)
             result = re.sub(r'^`{3}\n?', '', result, flags=re.MULTILINE)
             
@@ -372,7 +366,7 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     return ""
 
 def parse_llm_xml(xml_text: str) -> dict:
-    data = {"cover": {"title": "", "prompt": "", "insight": ""}, "pulse": "", "themes": [], "market_radar": [], "risk_and_trends": [], "top_picks": []}
+    data = {"cover": {"title": "", "prompt": "", "insight": ""}, "pulse": "", "themes": [], "market_radar": [], "money_tips": [], "top_picks": []}
     if not xml_text: return data
 
     cover_match = re.search(r'<COVER\s+title=[\'"“”](.*?)[\'"“”]\s+prompt=[\'"“”](.*?)[\'"“”]\s+insight=[\'"“”](.*?)[\'"“”]\s*/?>', xml_text, re.IGNORECASE | re.DOTALL)
@@ -392,10 +386,7 @@ def parse_llm_xml(xml_text: str) -> dict:
         emoji = emoji_m.group(1).strip() if emoji_m else "🔥"
         
         t_tag = re.search(r'<TITLE>(.*?)</TITLE>', theme_body, re.IGNORECASE | re.DOTALL)
-        theme_title = t_tag.group(1).strip() if t_tag else ""
-        if not theme_title:
-            title_m = re.search(r'title\s*=\s*[\'"“”](.*?)[\'"“”]', attrs, re.IGNORECASE)
-            theme_title = title_m.group(1).strip() if title_m else "未命名主题"
+        theme_title = t_tag.group(1).strip() if t_tag else "未命名主题"
             
         narrative_match = re.search(r'<NARRATIVE>(.*?)</NARRATIVE>', theme_body, re.IGNORECASE | re.DOTALL)
         narrative = narrative_match.group(1).strip() if narrative_match else ""
@@ -407,17 +398,25 @@ def parse_llm_xml(xml_text: str) -> dict:
             for t_match in re.finditer(r'<TWEET\s+account="(.*?)"\s+role="(.*?)">(.*?)</TWEET>', theme_body, re.IGNORECASE | re.DOTALL):
                 tweets.append({"account": t_match.group(1).strip(), "role": t_match.group(2).strip(), "content": t_match.group(3).strip()})
         
-        comments_match = re.search(r'<COMMENTS>(.*?)</COMMENTS>', theme_body, re.IGNORECASE | re.DOTALL)
-        comments = comments_match.group(1).strip() if comments_match else ""
+        # 解析全新的独立模块
+        gossip_match = re.search(r'<GOSSIP>(.*?)</GOSSIP>', theme_body, re.IGNORECASE | re.DOTALL)
+        gossip = gossip_match.group(1).strip() if gossip_match else ""
 
         opp_match = re.search(r'<OPPORTUNITY>(.*?)</OPPORTUNITY>', theme_body, re.IGNORECASE | re.DOTALL)
         opportunity = opp_match.group(1).strip() if opp_match else ""
+        
         risk_match = re.search(r'<RISK>(.*?)</RISK>', theme_body, re.IGNORECASE | re.DOTALL)
         risk = risk_match.group(1).strip() if risk_match else ""
+
+        cons_match = re.search(r'<CONSENSUS>(.*?)</CONSENSUS>', theme_body, re.IGNORECASE | re.DOTALL)
+        consensus = cons_match.group(1).strip() if cons_match else ""
+
+        div_match = re.search(r'<DIVERGENCE>(.*?)</DIVERGENCE>', theme_body, re.IGNORECASE | re.DOTALL)
+        divergence = div_match.group(1).strip() if div_match else ""
         
         data["themes"].append({
             "type": "new", "emoji": emoji, "title": theme_title, "narrative": narrative, "tweets": tweets,
-            "comments": comments, "opportunity": opportunity, "risk": risk
+            "gossip": gossip, "opportunity": opportunity, "risk": risk, "consensus": consensus, "divergence": divergence
         })
         
     def extract_items(tag_name, target_list):
@@ -427,7 +426,7 @@ def parse_llm_xml(xml_text: str) -> dict:
                 target_list.append({"category": item.group(1).strip(), "content": item.group(2).strip()})
 
     extract_items("MARKET_RADAR", data["market_radar"])
-    extract_items("RISK_AND_TRENDS", data["risk_and_trends"])
+    extract_items("MONEY_TIPS", data["money_tips"])
 
     picks_match = re.search(r'<TOP_PICKS>(.*?)</TOP_PICKS>', xml_text, re.IGNORECASE | re.DOTALL)
     if picks_match:
@@ -460,9 +459,12 @@ def render_feishu_card(parsed_data: dict, today_str: str):
             for t in theme["tweets"]:
                 theme_md += f"🗣️ **@{t['account']} | {t['role']}**\n<font color='grey'>“{t['content']}”</font>\n"
             
-            if theme.get("comments"): theme_md += f"<font color='red'>**🔥 专家点评：**</font> {theme['comments']}\n"
+            # 🚨 动态渲染吃瓜姿势与四选二角度
+            if theme.get("gossip"): theme_md += f"<font color='red'>**🍉 吃瓜姿势：**</font> {theme['gossip']}\n"
             if theme.get("opportunity"): theme_md += f"<font color='green'>**🎯 潜在机会：**</font> {theme['opportunity']}\n"
             if theme.get("risk"): theme_md += f"<font color='red'>**⚠️ 踩坑预警：**</font> {theme['risk']}\n"
+            if theme.get("consensus"): theme_md += f"<font color='blue'>**🤝 核心共识：**</font> {theme['consensus']}\n"
+            if theme.get("divergence"): theme_md += f"<font color='orange'>**⚔️ 重大分歧：**</font> {theme['divergence']}\n"
             
             elements.append({"tag": "markdown", "content": theme_md.strip()})
             if idx < len(parsed_data["themes"]) - 1: elements.append({"tag": "hr"})
@@ -476,8 +478,8 @@ def render_feishu_card(parsed_data: dict, today_str: str):
         elements.append({"tag": "markdown", "content": content.strip()})
         elements.append({"tag": "hr"})
 
-    add_list_section("市场雷达 (Market Radar)", "💰", parsed_data["market_radar"])
-    add_list_section("风险与趋势 (Risk & Trends)", "📊", parsed_data["risk_and_trends"])
+    add_list_section("市场雷达 (Market Radar)", "📈", parsed_data["market_radar"])
+    add_list_section("搞钱锦囊 (Money Tips)", "💎", parsed_data["money_tips"])
 
     if parsed_data["top_picks"]:
         picks_md = "**▌ 📣 今日精选推文 (Top 5 Picks)**\n"
@@ -489,8 +491,8 @@ def render_feishu_card(parsed_data: dict, today_str: str):
         "msg_type": "interactive",
         "card": {
             "config": {"wide_screen_mode": True, "enable_forward": True},
-            "header": {"title": {"content": f"昨晚大佬们在聊啥 | {today_str}", "tag": "plain_text"}, "template": "blue"},
-            "elements": elements + [{"tag": "note", "elements": [{"tag": "plain_text", "content": "Powered by TwitterAPI.io + Perplexity + xAI"}]}]
+            "header": {"title": {"content": f"出海搞钱的中国人在聊啥 | {today_str}", "tag": "plain_text"}, "template": "blue"},
+            "elements": elements + [{"tag": "note", "elements": [{"tag": "plain_text", "content": "Powered by TwitterAPI.io + xAI Multi-Agent"}]}]
         }
     }
 
@@ -505,7 +507,9 @@ def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
     if cover_url: html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
     
     if parsed_data["cover"].get("insight"):
-        header_text = "💡 Insight"
+        # 将大模型生成的精彩短标题放在 Insight 旁边展示
+        base_title = parsed_data["cover"]["title"] or "今日核心动态"
+        header_text = f"💡 Insight | {base_title}"
         html_lines.append(f'<div style="border-radius:8px;background:#FFF7E6;padding:12px 14px;margin:0 0 20px 0;color:#d97706;"><div style="font-weight:bold;margin-bottom:6px;">{header_text}</div><div>{parsed_data["cover"]["insight"]}</div></div>')
 
     def make_h3(title): return f'<h3 style="margin:24px 0 12px 0;font-size:18px;border-left:4px solid #4A90E2;padding-left:10px;color:#2c3e50;font-weight:bold;">{title}</h3>'
@@ -527,9 +531,12 @@ def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
                 html_lines.append(f'<p style="margin:8px 0 2px 0;font-size:14px;font-weight:bold;color:#2c3e50;">🗣️ @{t["account"]} <span style="color:#94a3b8;font-weight:normal;">| {t["role"]}</span></p>')
                 html_lines.append(make_quote(f'"{t["content"]}"'))
             
-            if theme.get("comments"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#b91c1c;">🔥 专家点评：</strong>{theme["comments"]}</p>')
-            if theme.get("opportunity"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#f0fdf4; padding: 8px 12px; border-radius: 4px;"><strong style="color:#16a34a;">🎯 机会启示：</strong>{theme["opportunity"]}</p>')
+            # 🚨 渲染吃瓜姿势与四选二的动态角度
+            if theme.get("gossip"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#b91c1c;">🍉 吃瓜姿势：</strong>{theme["gossip"]}</p>')
+            if theme.get("opportunity"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#f0fdf4; padding: 8px 12px; border-radius: 4px;"><strong style="color:#16a34a;">🎯 潜在机会：</strong>{theme["opportunity"]}</p>')
             if theme.get("risk"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fef2f2; padding: 8px 12px; border-radius: 4px;"><strong style="color:#dc2626;">⚠️ 踩坑预警：</strong>{theme["risk"]}</p>')
+            if theme.get("consensus"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#eff6ff; padding: 8px 12px; border-radius: 4px;"><strong style="color:#2563eb;">🤝 核心共识：</strong>{theme["consensus"]}</p>')
+            if theme.get("divergence"): html_lines.append(f'<p style="margin:6px 0; font-size:15px; line-height:1.6; background:#fff7ed; padding: 8px 12px; border-radius: 4px;"><strong style="color:#ea580c;">⚔️ 重大分歧：</strong>{theme["divergence"]}</p>')
 
     def make_list_section(title, items):
         if not items: return
@@ -537,8 +544,8 @@ def render_wechat_html(parsed_data: dict, cover_url: str = "") -> str:
         for item in items: 
             html_lines.append(f'<p style="margin:10px 0;font-size:15px;line-height:1.6;">👉 <strong style="color:#2c3e50;">{item["category"]}：</strong><span style="color:#333;">{item["content"]}</span></p>')
 
-    make_list_section("💰 市场雷达 (Market Radar)", parsed_data["market_radar"])
-    make_list_section("📊 风险与趋势 (Risk & Trends)", parsed_data["risk_and_trends"])
+    make_list_section("📈 市场雷达 (Market Radar)", parsed_data["market_radar"])
+    make_list_section("💎 搞钱锦囊 (Money Tips)", parsed_data["money_tips"])
 
     if parsed_data["top_picks"]:
         html_lines.append(make_h3("📣 今日精选推文 (Top 5 Picks)"))
@@ -617,7 +624,7 @@ def update_account_stats(final_feed: list, parsed_data: dict):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"昨晚大佬们在聊啥 v13.0 (全网中文热点探测 + Multi-Agent 聚类版 - {mode_str})", flush=True)
+    print(f"出海搞钱吃瓜版 v13.1 (出海锦囊 + 精准吃瓜 - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     
     if not TWITTERAPI_IO_KEY:
@@ -627,11 +634,8 @@ def main():
     today_str, _ = get_dates()
     all_raw_tweets = []
     
-    # 🚨 1. 抓取巨鲸池与专家池
     all_raw_tweets.extend(fetch_tweets_twitterapi_io(WHALE_ACCOUNTS, label="巨鲸"))
     all_raw_tweets.extend(fetch_tweets_twitterapi_io(EXPERT_ACCOUNTS, label="专家"))
-    
-    # 🚨 2. 抓取全网高赞中文热点 (打破列表盲区)
     all_raw_tweets.extend(fetch_global_hot_tweets_twitterapi())
     
     if not all_raw_tweets:
@@ -642,7 +646,6 @@ def main():
     for t in all_raw_tweets:
         likes = t.get("favorites", 0)
         is_reply = bool(t.get("reply_to"))
-        # 过滤垃圾信息，保留原创或高赞回复
         if not is_reply or likes >= 5: 
             all_posts_flat.append({
                 "a": t.get("screen_name", "Unknown"), 
@@ -669,7 +672,6 @@ def main():
             
         account_counts[author] = account_counts.get(author, 0) + 1
         
-        # 分流
         if author in lower_whales:
             whale_feed.append(t)
         elif author in lower_experts:
@@ -677,13 +679,11 @@ def main():
         else:
             global_feed.append(t)
 
-    # 强制配额：巨鲸15条，专家60条，全网探测外卡25条
     final_feed = whale_feed[:15] + expert_feed[:60] + global_feed[:25]
 
     combined_jsonl = "\n".join(json.dumps(obj, ensure_ascii=False) for obj in final_feed)
     print(f"\n[Data] 组装完成：{len(final_feed)} 条推文 ready for LLM.")
 
-    # 🚨 3. 获取 Perplexity 客观宏观数据
     macro_info = fetch_macro_with_perplexity()
 
     if combined_jsonl.strip() or macro_info:
@@ -701,15 +701,14 @@ def main():
                 
             if JIJYUN_WEBHOOK_URL:
                 html_content = render_wechat_html(parsed_data, cover_url)
-                # V13.0: 构建推送的网感微信主标题
-                base_title = parsed_data["cover"]["title"] or "今日核心动态"
-                wechat_title = f"{base_title} | 昨晚大佬们在聊啥？"
+                # 🚨 根据你的要求：推送主标题固定为 "出海搞钱的中国人在聊啥 | 2026-03-xx"
+                wechat_title = f"出海搞钱的中国人在聊啥 | {today_str}"
                 push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
                 
             save_daily_data(today_str, final_feed, xml_result)
             update_account_stats(final_feed, parsed_data)
             
-            print("\n🎉 V13.0 运行完毕！", flush=True)
+            print("\n🎉 V13.1 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
