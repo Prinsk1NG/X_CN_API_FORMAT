@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v13.2 (出海搞钱精修版: 强制5条 + 排版净化)
+x_api_auto_task_xai_xml.py  v13.5 (出海搞钱：立体抓取与高精打分旗舰版)
 Architecture: TwitterAPI.io -> PPLX -> xAI SDK (Grok-4.20-Multi-Agent) -> Clean UI
 """
 
@@ -23,7 +23,6 @@ from xai_sdk.chat import user, system
 TEST_MODE = os.getenv("TEST_MODE_ENV", "false").lower() == "true"
 
 # ── 环境变量 ──────────────────────────────
-JIJYUN_WEBHOOK_URL  = os.getenv("JIJYUN_WEBHOOK_URL", "")
 SF_API_KEY          = os.getenv("SF_API_KEY", "")
 XAI_API_KEY         = os.getenv("XAI_API_KEY", "")    
 IMGBB_API_KEY       = os.getenv("IMGBB_API_KEY", "") 
@@ -76,6 +75,14 @@ def get_feishu_webhooks() -> list:
     urls = []
     for suffix in ["", "_1", "_2", "_3"]:
         url = os.getenv(f"FEISHU_WEBHOOK_URL{suffix}", "")
+        if url: urls.append(url)
+    return urls
+
+# 🚨 微信推送多通道路由配置 (加入 OriCN_WEBHOOK_URL)
+def get_wechat_webhooks() -> list:
+    urls = []
+    for key in ["JIJYUN_WEBHOOK_URL", "OriCN_WEBHOOK_URL"]:
+        url = os.getenv(key, "")
         if url: urls.append(url)
     return urls
 
@@ -141,7 +148,7 @@ def fetch_macro_with_perplexity() -> str:
     return ""
 
 # ==============================================================================
-# 🚀 第一阶段：TwitterAPI.io 原生抓取引擎
+# 🚀 第一阶段：TwitterAPI.io 强大且纯净的原生抓取
 # ==============================================================================
 def parse_tweets_recursive(data) -> list:
     all_tweets = []
@@ -162,13 +169,14 @@ def parse_tweets_recursive(data) -> list:
                 t_id = obj.get("rest_id") or obj.get("id_str") or obj.get("id") or obj.get("tweet_id")
                 if not t_id and obj.get("legacy"): t_id = obj["legacy"].get("id_str")
                 
-                fav = obj.get("favorite_count") or obj.get("favorites") or obj.get("likes") or obj.get("like_count") or 0
+                # 🚨 兼容 likeCount 等驼峰命名数据，防止数据归零
+                fav = obj.get("favorite_count") or obj.get("favorites") or obj.get("likes") or obj.get("like_count") or obj.get("likeCount") or 0
                 if not fav and obj.get("legacy"): fav = obj["legacy"].get("favorite_count", 0)
                 
-                rep = obj.get("reply_count") or obj.get("replies") or 0
+                rep = obj.get("reply_count") or obj.get("replies") or obj.get("replyCount") or 0
                 if not rep and obj.get("legacy"): rep = obj["legacy"].get("reply_count", 0)
                 
-                created_at = obj.get("created_at")
+                created_at = obj.get("created_at") or obj.get("createdAt")
                 if not created_at and obj.get("legacy"): created_at = obj["legacy"].get("created_at", "")
                 
                 reply_to = obj.get("in_reply_to_screen_name") or obj.get("reply_to") or obj.get("is_reply")
@@ -251,8 +259,26 @@ def fetch_global_hot_tweets_twitterapi() -> list:
         
     return all_tweets
 
+# 🚨 启发 1: 独立神回复挖掘器 (立体抓取)
+def fetch_tweet_replies(tweet_id, screen_name):
+    """自动挖掘热帖下的神评论，还原真实共识与分歧"""
+    if not TWITTERAPI_IO_KEY or not tweet_id: return []
+    url = "https://api.twitterapi.io/twitter/tweet/advanced_search"
+    headers = {"X-API-Key": TWITTERAPI_IO_KEY}
+    query = f"conversation_id:{tweet_id} -from:{screen_name}"
+    params = {"query": query, "queryType": "Top"}
+    try:
+        resp = requests.get(url, headers=headers, params=params, timeout=15)
+        if resp.status_code == 200:
+            tweets = parse_tweets_recursive(resp.json())
+            # 按点赞数从高到低排序，提取头两名
+            tweets = sorted(tweets, key=lambda x: x.get("favorites", 0), reverse=True)
+            return tweets[:2]
+    except Exception: pass
+    return []
+
 # ==============================================================================
-# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20-Multi-Agent 出海吃瓜精修版)
+# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20-Multi-Agent 数据锚点版)
 # ==============================================================================
 def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     return f"""
@@ -274,34 +300,30 @@ def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> s
     <THEME type="new" emoji="🔥">
       <TITLE>话题名称：简短描述</TITLE>
       <NARRATIVE>一句话说明：到底发生了什么、什么在变化</NARRATIVE>
-      <TWEET account="X账号名" role="中文身份标签">以中文为主精练大佬的实战言论或爆料</TWEET>
+      <TWEET account="X账号名" role="中文身份标签">【严禁纯英文】以中文为主精练大佬的实战言论或爆料。🚨必须在推文末尾附带我们传入的真实互动数据（如 ❤️ 39190 | 💬 1904）</TWEET>
       
       <GOSSIP>直接写专家点评内容，绝不要加任何前缀！必须限制在30字以内！</GOSSIP>
       
-      <!-- 🚨 必须从以下 4 个角度中，任选 1 到 2 个最契合的进行输出。没有突出的就不写，直接省略该标签！ -->
       <OPPORTUNITY>潜在机会：具体的红利、赛道方向或搞钱思路</OPPORTUNITY>
       <RISK>踩坑预警：可能面临的失败教训、封号、合规等风险</RISK>
-      <CONSENSUS>核心共识：大家一致认同的核心判断</CONSENSUS>
-      <DIVERGENCE>重大分歧：争议点或未解之谜</DIVERGENCE>
+      <CONSENSUS>结合神回复中展现的态度，总结核心共识</CONSENSUS>
+      <DIVERGENCE>结合神回复中展现的态度，总结重大分歧</DIVERGENCE>
     </THEME>
   </THEMES>
 
   <MARKET_RADAR>
-    <!-- 🚨 必须极度具体！必须指明具体公司名或明确的细分赛道！ -->
     <ITEM category="硬核快讯">重磅融资、财报等客观事实，必须有明确的主体和数字。</ITEM>
     <ITEM category="行业风向">巨头具体动作、极其明确的细分市场洞察。</ITEM>
   </MARKET_RADAR>
 
   <MONEY_TIPS>
-    <!-- 🚨 必填固定板块：搞钱锦囊 -->
     <ITEM category="搞副业经验">提取大佬分享的副业思路、变现过程或经验。</ITEM>
     <ITEM category="出海实操">海外银行卡、电话卡、网络收费避坑等出海运营经验。</ITEM>
     <ITEM category="实用小工具">被推荐的效率神器、新开源项目或好用的出海工具。</ITEM>
   </MONEY_TIPS>
 
   <TOP_PICKS>
-    <!-- 🚨 【强制纪律】必须严格挑选出正好 5 条全网最精彩的推文！允许与上面的 THEMES 重复。少于 5 条将被视为严重失败！ -->
-    <TWEET account="..." role="...">【严禁纯英文】价值最大、最有趣或点赞极高的原味金句（中文精译）</TWEET>
+    <TWEET account="..." role="...">【严禁纯英文】价值最大、最有趣或点赞极高的原味金句（中文精译）。🚨必须在推文末尾附带真实的互动数据（如 ❤️ 39190 | 💬 1904）</TWEET>
     <TWEET account="..." role="...">...</TWEET>
     <TWEET account="..." role="...">...</TWEET>
     <TWEET account="..." role="...">...</TWEET>
@@ -485,6 +507,7 @@ def render_feishu_card(parsed_data: dict, today_str: str):
             print(f"[Push/Feishu] OK Card sent...", flush=True)
         except Exception as e: print(f"[Push/Feishu] ERROR: {e}", flush=True)
 
+# 🚨 启发 4: 微信 UI 极致净化，彻底抹除 Insight 框
 def render_wechat_html(parsed_data: dict, today_str: str, cover_url: str = "") -> str:
     html_lines = []
     if cover_url: html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
@@ -552,12 +575,23 @@ def upload_to_imgbb_via_url(sf_url):
     except: pass
     return sf_url
 
-def push_to_jijyun(html_content, title, cover_url=""):
-    if not JIJYUN_WEBHOOK_URL: return
-    try: 
-        requests.post(JIJYUN_WEBHOOK_URL, json={"title": title, "author": "Prinski", "html_content": html_content, "cover_jpg": cover_url}, timeout=30)
-        print(f"[Push/WeChat] OK Sent to Jijyun", flush=True)
-    except Exception as e: print(f"  ⚠️ 推送机语警告: {e}", flush=True)
+def push_to_wechat(html_content, title, cover_url=""):
+    webhooks = get_wechat_webhooks()
+    if not webhooks: return
+    
+    payload = {
+        "title": title, 
+        "author": "Prinski", 
+        "html_content": html_content, 
+        "cover_jpg": cover_url
+    }
+    
+    for url in webhooks:
+        try: 
+            requests.post(url, json=payload, timeout=30)
+            print(f"[Push/WeChat] OK Sent to {url.split('//')[-1][:15]}...", flush=True)
+        except Exception as e: 
+            print(f"  ⚠️ 推送微信警告: {e}", flush=True)
 
 def save_daily_data(today_str: str, post_objects: list, report_text: str):
     data_dir = Path(f"data/{today_str}")
@@ -600,7 +634,7 @@ def update_account_stats(final_feed: list, parsed_data: dict):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"出海搞钱吃瓜版 v13.2 (精修排版与防偷懒版 - {mode_str})", flush=True)
+    print(f"出海搞钱吃瓜版 v13.5 (立体抓取与高精打分旗舰版 - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     
     if not TWITTERAPI_IO_KEY:
@@ -619,30 +653,57 @@ def main():
         all_raw_tweets = [{"screen_name": "livid", "text": "刚刚部署了一个新版本的后端，速度快了三倍。", "favorites": 100, "created_at": "0101", "replies": 5}]
         
     all_posts_flat = []
+    lower_whales = set(a.lower() for a in WHALE_ACCOUNTS)
+    
     for t in all_raw_tweets:
-        likes = t.get("favorites", 0)
+        likes = safe_int(t.get("favorites", 0))
+        replies = safe_int(t.get("replies", 0))
         is_reply = bool(t.get("reply_to"))
-        if not is_reply or likes >= 5: 
+        
+        author = t.get("screen_name", "Unknown")
+        is_whale = author.lower() in lower_whales
+        
+        raw_text = t.get("text", "")
+        clean_text = re.sub(r'https?://\S+', '', raw_text).strip()
+        
+        if not clean_text: continue
+        
+        # 🚨 启发 2: 本地多维打分矩阵 (取代单纯的点赞判断)
+        score = likes * 1.0
+        if is_whale: score += 500
+        
+        # 针对出海、搞钱和 AI 设定的关键词提权库
+        keywords = ["ai", "llm", "agent", "gpt", "model", "出海", "副业", "搞钱", "独立开发", "创业", "融资", "开源"]
+        if any(k in clean_text.lower() for k in keywords):
+            score += 300
+            
+        if len(clean_text) < 30: score -= 1000
+        if is_reply: score -= 800
+        
+        if score > 0 or likes >= 5: 
+            # 🚨 启发 3: 强制数据锚点植入
+            anchored_text = f"{clean_text[:600]}\n❤️ {likes} | 💬 {replies}"
+            
             all_posts_flat.append({
-                "a": t.get("screen_name", "Unknown"), 
+                "a": author, 
                 "tweet_id": t.get("tweet_id", ""),
                 "l": likes, 
-                "r": t.get("replies", 0),
+                "r": replies,
+                "score": score,
                 "t": parse_twitter_date(t.get("created_at", "")), 
-                "s": re.sub(r'https?://\S+', '', t.get("text", "")).strip()[:600], 
+                "s": anchored_text, 
                 "qt": t.get("quote_text", "")[:200]
             })
 
-    all_posts_flat.sort(key=lambda x: x["l"], reverse=True)
+    # 按算力打分从高到低精选
+    all_posts_flat.sort(key=lambda x: x["score"], reverse=True)
     
-    lower_whales = set(a.lower() for a in WHALE_ACCOUNTS)
     lower_experts = set(a.lower() for a in EXPERT_ACCOUNTS)
     
     whale_feed, expert_feed, global_feed = [], [], []
     account_counts = {}
     
     for t in all_posts_flat:
-        if len(t.get("s", "")) <= 20: continue
         author = t.get("a", "Unknown").lower()
         if account_counts.get(author, 0) >= 3: continue
             
@@ -656,6 +717,20 @@ def main():
             global_feed.append(t)
 
     final_feed = whale_feed[:15] + expert_feed[:60] + global_feed[:25]
+
+    # 🚨 启发 1: 立体抓取 (深挖高分神贴下面的神评论，供模型吃瓜)
+    print(f"\n[深挖] 正在为 Top 10 高分话题抓取神回复...", flush=True)
+    top_items = sorted(final_feed, key=lambda x: x["score"], reverse=True)[:10]
+    for item in top_items:
+        replies_data = fetch_tweet_replies(item["tweet_id"], item["a"])
+        if replies_data:
+            reply_strs = []
+            for r in replies_data:
+                r_text = re.sub(r'https?://\S+', '', r.get("text", "")).strip()[:150]
+                r_likes = r.get("favorites", 0)
+                reply_strs.append(f"[神回复 @{r['screen_name']}]: {r_text} (❤️ {r_likes})")
+            item["s"] += "\n\n" + "\n".join(reply_strs)
+        time.sleep(1) # 控制 API 速率
 
     combined_jsonl = "\n".join(json.dumps(obj, ensure_ascii=False) for obj in final_feed)
     print(f"\n[Data] 组装完成：{len(final_feed)} 条推文 ready for LLM.")
@@ -675,18 +750,17 @@ def main():
             
             render_feishu_card(parsed_data, today_str)
                 
-            if JIJYUN_WEBHOOK_URL:
-                # 🚨 V13.2 渲染 HTML 并配置最终推文标题
+            wechat_hooks = get_wechat_webhooks()
+            if wechat_hooks:
                 html_content = render_wechat_html(parsed_data, today_str, cover_url)
-                
                 base_title = parsed_data["cover"]["title"] or "今日核心动态"
                 wechat_title = f"{base_title} | 出海搞钱的中国人在聊啥"
-                push_to_jijyun(html_content, title=wechat_title, cover_url=cover_url)
+                push_to_wechat(html_content, title=wechat_title, cover_url=cover_url)
                 
             save_daily_data(today_str, final_feed, xml_result)
             update_account_stats(final_feed, parsed_data)
             
-            print("\n🎉 V13.2 运行完毕！", flush=True)
+            print("\n🎉 V13.5 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
