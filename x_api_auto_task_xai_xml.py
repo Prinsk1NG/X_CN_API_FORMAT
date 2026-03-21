@@ -348,7 +348,7 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     data = combined_jsonl[:max_data_chars] if len(combined_jsonl) > max_data_chars else combined_jsonl
     prompt = _build_xml_prompt(data, today_str, macro_info)
     
-    model_name = "grok-4.20-multi-agent-beta-0309" 
+    model_name = "grok-4-1-fast-reasoning" 
 
     print(f"\n[LLM/xAI] Requesting {model_name} via Official xai-sdk...", flush=True)
     client = Client(api_key=api_key)
