@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-x_api_auto_task_xai_xml.py  v13.5 (出海搞钱：立体抓取与高精打分旗舰版)
-Architecture: TwitterAPI.io -> PPLX -> xAI SDK (Grok-4.20-Multi-Agent) -> Clean UI
+x_api_auto_task_xai_xml.py  v13.6 (出海搞钱：推理模型与生图 Debug 专版)
+Architecture: TwitterAPI.io -> PPLX -> xAI SDK (grok-4.20-0309-reasoning) -> Clean UI
 """
 
 import os
@@ -278,12 +278,12 @@ def fetch_tweet_replies(tweet_id, screen_name):
     return []
 
 # ==============================================================================
-# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20-Multi-Agent 数据锚点版)
+# 🚀 第二阶段：纯 XML 提示词与大模型调用 (Grok-4.20 Reasoning 版本)
 # ==============================================================================
 def _build_xml_prompt(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     return f"""
 你是一个专业的 X（Twitter）话题分析师和出海搞钱圈主编。
-目前你搭载了强大的 Multi-Agent 聚类分析能力。请基于下面过去 24 小时的账号更新，自动进行主题聚类。
+请基于下面过去 24 小时的账号更新，自动进行主题聚类，严格以 XML 格式输出。
 
 【核心指令】
 1. 挑选出 3~5 个最有趣、最硬核或最有讨论价值的话题作为 <THEMES>。
@@ -348,6 +348,7 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
     data = combined_jsonl[:max_data_chars] if len(combined_jsonl) > max_data_chars else combined_jsonl
     prompt = _build_xml_prompt(data, today_str, macro_info)
     
+    # 🚨 按照您的要求，强制锁死使用带有深度思考能力的 Reasoning 模型
     model_name = "grok-4.20-0309-reasoning" 
 
     print(f"\n[LLM/xAI] Requesting {model_name} via Official xai-sdk...", flush=True)
@@ -360,10 +361,13 @@ def llm_call_xai(combined_jsonl: str, today_str: str, macro_info: str) -> str:
             chat.append(user(prompt))
             result = chat.sample().content.strip()
             
+            # 🚨 核心清洗逻辑：切除推理模型的 <think>...</think> 内部独白，防止破坏 XML 结构
+            result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL | re.IGNORECASE).strip()
+            
             result = re.sub(r'^`{3}(?:xml|jsonl|json)?\n', '', result, flags=re.MULTILINE)
             result = re.sub(r'^`{3}\n?', '', result, flags=re.MULTILINE)
             
-            print(f"[LLM/xAI] OK Response received ({len(result)} chars)", flush=True)
+            print(f"[LLM/xAI] OK Response received ({len(result)} chars after think cleanup)", flush=True)
             return result
         except Exception as e:
             print(f"[LLM/xAI] Attempt {attempt} failed: {e}", flush=True)
@@ -497,7 +501,7 @@ def render_feishu_card(parsed_data: dict, today_str: str):
         "card": {
             "config": {"wide_screen_mode": True, "enable_forward": True},
             "header": {"title": {"content": f"出海搞钱的中国人在聊啥 | {today_str}", "tag": "plain_text"}, "template": "blue"},
-            "elements": elements + [{"tag": "note", "elements": [{"tag": "plain_text", "content": "Powered by TwitterAPI.io + xAI Multi-Agent"}]}]
+            "elements": elements + [{"tag": "note", "elements": [{"tag": "plain_text", "content": "Powered by TwitterAPI.io + xAI Reasoning"}]}]
         }
     }
 
@@ -507,7 +511,6 @@ def render_feishu_card(parsed_data: dict, today_str: str):
             print(f"[Push/Feishu] OK Card sent...", flush=True)
         except Exception as e: print(f"[Push/Feishu] ERROR: {e}", flush=True)
 
-# 🚨 启发 4: 微信 UI 极致净化，彻底抹除 Insight 框
 def render_wechat_html(parsed_data: dict, today_str: str, cover_url: str = "") -> str:
     html_lines = []
     if cover_url: html_lines.append(f'<p style="text-align:center;margin:0 0 16px 0;"><img src="{cover_url}" style="max-width:100%;border-radius:8px;" /></p>')
@@ -558,11 +561,19 @@ def render_wechat_html(parsed_data: dict, today_str: str, cover_url: str = "") -
 # 附加工具 (生图、图床与推送)
 # ==============================================================================
 def generate_cover_image(prompt):
-    if not SF_API_KEY or not prompt: return ""
+    # 🚨 显微镜级别的错误捕捉，排查生图失败的真正原因
+    if not SF_API_KEY or not prompt: 
+        print("⚠️ 生图跳过：未收到生图 prompt 或未配置 SF_API_KEY", flush=True)
+        return ""
     try:
         resp = requests.post(URL_SF_IMAGE, headers={"Authorization": f"Bearer {SF_API_KEY}", "Content-Type": "application/json"}, json={"model": "black-forest-labs/FLUX.1-schnell", "prompt": prompt, "n": 1, "image_size": "1024x576"}, timeout=60)
-        if resp.status_code == 200: return resp.json().get("images", [{}])[0].get("url") or resp.json().get("data", [{}])[0].get("url")
-    except: pass
+        if resp.status_code == 200:
+            print("🎨 生图成功！", flush=True)
+            return resp.json().get("images", [{}])[0].get("url") or resp.json().get("data", [{}])[0].get("url")
+        else:
+            print(f"⚠️ 硅基流动报错 | 状态码: {resp.status_code} | 信息: {resp.text}", flush=True)
+    except Exception as e:
+        print(f"⚠️ 生图代码异常抛出: {e}", flush=True)
     return ""
 
 def upload_to_imgbb_via_url(sf_url):
@@ -634,7 +645,7 @@ def update_account_stats(final_feed: list, parsed_data: dict):
 def main():
     print("=" * 60, flush=True)
     mode_str = "测试模式" if TEST_MODE else "全量模式"
-    print(f"出海搞钱吃瓜版 v13.5 (立体抓取与高精打分旗舰版 - {mode_str})", flush=True)
+    print(f"出海搞钱吃瓜版 v13.6 (推理模型与生图 Debug 专版 - {mode_str})", flush=True)
     print("=" * 60, flush=True)
     
     if not TWITTERAPI_IO_KEY:
@@ -668,11 +679,9 @@ def main():
         
         if not clean_text: continue
         
-        # 🚨 启发 2: 本地多维打分矩阵 (取代单纯的点赞判断)
         score = likes * 1.0
         if is_whale: score += 500
         
-        # 针对出海、搞钱和 AI 设定的关键词提权库
         keywords = ["ai", "llm", "agent", "gpt", "model", "出海", "副业", "搞钱", "独立开发", "创业", "融资", "开源"]
         if any(k in clean_text.lower() for k in keywords):
             score += 300
@@ -681,7 +690,6 @@ def main():
         if is_reply: score -= 800
         
         if score > 0 or likes >= 5: 
-            # 🚨 启发 3: 强制数据锚点植入
             anchored_text = f"{clean_text[:600]}\n❤️ {likes} | 💬 {replies}"
             
             all_posts_flat.append({
@@ -695,7 +703,6 @@ def main():
                 "qt": t.get("quote_text", "")[:200]
             })
 
-    # 按算力打分从高到低精选
     all_posts_flat.sort(key=lambda x: x["score"], reverse=True)
     
     lower_experts = set(a.lower() for a in EXPERT_ACCOUNTS)
@@ -718,7 +725,6 @@ def main():
 
     final_feed = whale_feed[:15] + expert_feed[:60] + global_feed[:25]
 
-    # 🚨 启发 1: 立体抓取 (深挖高分神贴下面的神评论，供模型吃瓜)
     print(f"\n[深挖] 正在为 Top 10 高分话题抓取神回复...", flush=True)
     top_items = sorted(final_feed, key=lambda x: x["score"], reverse=True)[:10]
     for item in top_items:
@@ -730,7 +736,7 @@ def main():
                 r_likes = r.get("favorites", 0)
                 reply_strs.append(f"[神回复 @{r['screen_name']}]: {r_text} (❤️ {r_likes})")
             item["s"] += "\n\n" + "\n".join(reply_strs)
-        time.sleep(1) # 控制 API 速率
+        time.sleep(1)
 
     combined_jsonl = "\n".join(json.dumps(obj, ensure_ascii=False) for obj in final_feed)
     print(f"\n[Data] 组装完成：{len(final_feed)} 条推文 ready for LLM.")
@@ -745,8 +751,11 @@ def main():
             
             cover_url = ""
             if parsed_data["cover"]["prompt"]:
+                print(f"\n[生图] 提取到生图提示词: {parsed_data['cover']['prompt'][:50]}...", flush=True)
                 sf_url = generate_cover_image(parsed_data["cover"]["prompt"])
                 cover_url = upload_to_imgbb_via_url(sf_url) if sf_url else ""
+            else:
+                print("\n[生图] ⚠️ 警告：未能从大模型返回的 XML 中解析出 prompt 属性！", flush=True)
             
             render_feishu_card(parsed_data, today_str)
                 
@@ -760,7 +769,7 @@ def main():
             save_daily_data(today_str, final_feed, xml_result)
             update_account_stats(final_feed, parsed_data)
             
-            print("\n🎉 V13.5 运行完毕！", flush=True)
+            print("\n🎉 V13.6 运行完毕！", flush=True)
         else:
             print("❌ LLM 处理失败，任务终止。")
 
