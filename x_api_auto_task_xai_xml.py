@@ -566,7 +566,7 @@ def generate_cover_image(prompt):
         print("⚠️ 生图跳过：未收到生图 prompt 或未配置 SF_API_KEY", flush=True)
         return ""
     try:
-        resp = requests.post(URL_SF_IMAGE, headers={"Authorization": f"Bearer {SF_API_KEY}", "Content-Type": "application/json"}, json={"model": "Qwen/Qwen-Image", "prompt": prompt, "n": 1, "image_size": "1024x576"}, timeout=60)
+        resp = requests.post(URL_SF_IMAGE, headers={"Authorization": f"Bearer {SF_API_KEY}", "Content-Type": "application/json"}, json={"model": "Kwai-Kolors/Kolors", "prompt": prompt, "n": 1, "image_size": "1024x576"}, timeout=60)
         if resp.status_code == 200:
             print("🎨 生图成功！", flush=True)
             return resp.json().get("images", [{}])[0].get("url") or resp.json().get("data", [{}])[0].get("url")
