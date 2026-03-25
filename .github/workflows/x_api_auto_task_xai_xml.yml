@@ -6,7 +6,7 @@ on:
    # - cron: '0 0 * * *'
   
   # 允许在 GitHub Actions 页面手动点击运行，并支持传入测试参数
-  workflow_dispatch:
+  # workflow_dispatch:
     inputs:
       test_mode:
         description: '开启测试模式 (快速验证功能)'
